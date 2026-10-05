@@ -1,0 +1,47 @@
+# =============================================================================
+# PR Checks — quality gate for every PR into dev or main of tracebim-ci.
+#
+#   title   The shared PR-title check (pr-title.yml, called by local path):
+#           the title must be a Conventional Commit subject (it becomes the
+#           squash commit that drives the release) matching the branch type.
+#   check   npm run check: builds actions/auto-work-items, fails when the
+#           committed dist/ differs from src/ (callers run dist/ straight from
+#           the action download, with no build step), and syntax-checks the
+#           shell and Node scripts.
+#
+# The two jobs run in parallel.
+# =============================================================================
+name: PR Checks
+
+on:
+  pull_request:
+    branches: ['main', 'dev']
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    uses: ./.github/workflows/pr-title.yml
+
+  check:
+    name: Build and check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build, verify dist is committed, syntax-check scripts
+        run: npm run check

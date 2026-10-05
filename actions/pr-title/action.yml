@@ -1,0 +1,49 @@
+# The PR title becomes the squash commit that drives the semver release, so it
+# must be a Conventional Commit subject whose type matches the branch prefix.
+#
+# Also fails when the caller keeps a LOCAL COPY of a managed/ file and it
+# differs from this version's (bin/sync-managed.sh) — the husky commit-msg hook
+# runs that copy, so drift would let a commit pass locally that CI rejects.
+# A repo that keeps no copy (its hook runs ../tracebim-ci directly) is fine.
+# The caller must have checked out the managed paths (sparse is enough).
+name: PR title
+description: Validate a PR title against Conventional Commits and the branch release type.
+inputs:
+  title:
+    description: The pull request title.
+    required: true
+  head-ref:
+    description: The pull request head branch.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate PR title
+      shell: sh
+      env:
+        PR_TITLE: ${{ inputs.title }}
+        CI_ROOT: ${{ github.action_path }}/../..
+      run: sh "$CI_ROOT/managed/scripts/release/validate-conventional-subject.sh" "$PR_TITLE" "pull request title"
+
+    - name: Verify PR title matches branch release type
+      shell: sh
+      env:
+        PR_HEAD_REF: ${{ inputs.head-ref }}
+        PR_TITLE: ${{ inputs.title }}
+        CI_ROOT: ${{ github.action_path }}/../..
+      run: node "$CI_ROOT/scripts/release/verify-pr-release-type.mjs"
+
+    - name: Verify managed files are in sync
+      shell: bash
+      env:
+        CI_ROOT: ${{ github.action_path }}/../..
+      run: |
+        drift=0
+        while IFS= read -r rel; do
+          [ -f "$GITHUB_WORKSPACE/$rel" ] || continue
+          if ! cmp -s "$CI_ROOT/managed/$rel" "$GITHUB_WORKSPACE/$rel"; then
+            echo "::error file=$rel::$rel differs from tracebim-ci's managed copy. Run tracebim-ci/bin/sync-managed.sh -C <this repo> and commit the result, or delete the copy and have the hook run ../tracebim-ci directly."
+            drift=1
+          fi
+        done < <(cd "$CI_ROOT/managed" && find . -type f | sed 's#^\./##' | sort)
+        exit "$drift"

@@ -1,0 +1,15 @@
+# Opens or updates the single evergreen dev → main promotion PR. Runs
+# scripts/release/promote-dev-to-main.mjs from this repo against the CALLER's
+# checkout (it reads the caller's package.json for the current version).
+# Configuration comes from the job env: GITHUB_TOKEN, GITHUB_REPOSITORY,
+# AUTO_PROJECT_NUMBER/OWNER, AUTO_MILESTONE_TITLE, PROMOTION_ASSIGNEE.
+name: Promote dev to main
+description: Open or update the dev → main promotion PR.
+runs:
+  using: composite
+  steps:
+    - name: Open or update promotion PR
+      shell: sh
+      env:
+        CI_ROOT: ${{ github.action_path }}/../..
+      run: node "$CI_ROOT/scripts/release/promote-dev-to-main.mjs"

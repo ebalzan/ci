@@ -1,0 +1,23 @@
+# Creates or updates the tracking issue + PR + Projects (v2) metadata for the
+# pushed branch. Called by .github/workflows/auto-work-items.yml, which wires
+# every AUTO_* knob into the job env — this action reads them from there.
+# Needs no checkout: everything it learns about the branch comes from the API.
+name: Auto work items
+description: Create or update the issue, PR and project-board item for a feature branch.
+inputs:
+  github-token:
+    description: Token with issues/PR write on the repo and `project` on the board (classic PAT).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Create or update issue + PR + project metadata
+      uses: actions/github-script@v7
+      env:
+        AUTO_WORK_ITEMS_ENTRY: ${{ github.action_path }}/dist/index.js
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const mod = require(process.env.AUTO_WORK_ITEMS_ENTRY);
+          const runAutoWorkItems = mod.default || mod;
+          await runAutoWorkItems({ github, context, core });
