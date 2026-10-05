@@ -3,7 +3,9 @@
 The branch → `dev` → `main` → release flow every TraceBIM-CE repo runs. This
 file covers the stages tracebim-ci owns; what happens **after** a release
 (image + EC2, Vercel, EAS) and each repo's build/test checks are documented in
-that repo's `docs/CI_FLOW.md`.
+that repo's `docs/CI_FLOW.md`. tracebim-ci runs the same flow on itself
+(`.github/workflows/self-*.yml`), where the release also moves the `v1` tag the
+other repos pin (README → Releasing a change).
 
 > **Model:** feature branch → `dev` → `main`.
 > `dev` is the integration branch. `main` is the release branch.
