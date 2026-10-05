@@ -57,7 +57,11 @@ function getErrorList(error) {
         return [];
     return Array.isArray(error.errors) ? error.errors : [];
 }
+// An unset variable arrives as '' (auto-work-items.yml wires every AUTO_* from
+// `vars`), and Number('') is 0 — so blank must mean "use the fallback".
 function asDateOffset(value, fallback) {
+    if (!value?.trim())
+        return fallback;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
