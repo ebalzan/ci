@@ -1,0 +1,44 @@
+# =============================================================================
+# PR Title (reusable) — the shared part of every repo's PR Checks.
+#
+# The PR title becomes the squash commit that drives the semver release, so it
+# must be a Conventional Commit subject and its type must match the release
+# type the branch prefix implies (feat/ → minor, fix/ → patch, …).
+#
+# It also fails when the repo's managed copies (bin/sync-managed.sh) have
+# drifted from this version — the husky commit-msg hook runs those copies.
+#
+# The repo's own build/test jobs stay in its pr-checks.yml next to the call;
+# they run in parallel with this one.
+#
+# Caller must grant: contents: read.
+# =============================================================================
+name: PR Title
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner label for the job.
+        type: string
+        default: ubuntu-latest
+
+jobs:
+  validate-pr-title:
+    name: Validate PR Title
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+    steps:
+      # Only the managed paths are needed (for the drift check); the validators
+      # themselves come with the action and run on the runner's own Node.
+      - name: Checkout managed files
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/release
+          sparse-checkout-cone-mode: true
+
+      - uses: ebalzan/tracebim-ci/actions/pr-title@v1
+        with:
+          title: ${{ github.event.pull_request.title }}
+          head-ref: ${{ github.event.pull_request.head.ref }}

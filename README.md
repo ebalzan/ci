@@ -11,6 +11,7 @@ stays in that repo, and every repo can override or add any variable or secret.
 | [docs/CI_FLOW.md](docs/CI_FLOW.md)                                   | branch → `dev` → `main` → release, stage by stage, bump rules |
 | [docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md)         | where each value lives, shared vs repo layers, the bootstrap  |
 | [docs/AUTO_WORK_ITEMS_WORKFLOW.md](docs/AUTO_WORK_ITEMS_WORKFLOW.md) | the issue/PR/project-board automation                         |
+| [docs/COMMIT_GUIDE.md](docs/COMMIT_GUIDE.md)                         | commit conventions, PR titles, versioning                     |
 
 ## Layout
 
@@ -25,7 +26,7 @@ actions/                    composite actions the reusable workflows run
   auto-work-items/          TypeScript src/ + committed dist/
   pr-title/  promote/  release/
 scripts/release/            release-main, promote-dev-to-main, release-utils, verify-pr-release-type
-managed/                    files copied verbatim into every repo (bin/sync-managed.sh)
+managed/                    files repos' local tooling runs (the commit-msg validator)
 config/
   actions.env               shared variables            (committed)
   secrets.env               shared repository secrets   (gitignored; .example committed)
@@ -33,7 +34,7 @@ config/
 bin/
   gh-bootstrap.sh           merge shared + repo config → push to GitHub
   gh-reset.sh               delete Actions config on a repo
-  sync-managed.sh           copy managed/ into the repos
+  sync-managed.sh           refresh repos' optional local copies of managed/
 ```
 
 ## How a repo uses it
@@ -105,12 +106,19 @@ rules: [docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md).
 
 ## Managed files
 
-The husky `commit-msg` hook in each repo runs
-`scripts/release/validate-conventional-subject.sh` locally, offline. This repo
-is private, so the repos cannot npm-install it in CI — instead
-`bin/sync-managed.sh --all` copies everything under `managed/` into each repo,
-and the shared PR-title check fails while a repo's copy differs. Edit the file
-here, never in a repo.
+Each repo's husky `commit-msg` hook runs
+`managed/scripts/release/validate-conventional-subject.sh`. Preferred: the hook
+runs it straight from the sibling checkout
+(`${TRACEBIM_CI_DIR:-../tracebim-ci}`) and warns, without blocking, when that
+checkout is absent — the shared PR-title check still enforces the rule on every
+PR, and squash merges keep only the PR title. tracebim-api works this way and
+keeps no copy.
+
+A repo that wants the hook to work without the sibling checkout can keep a
+verbatim copy at the same path (`bin/sync-managed.sh -C <repo> --install`);
+this repo is private, so it cannot be npm-installed instead.
+`bin/sync-managed.sh --all` refreshes existing copies, and the PR-title check
+fails while one differs. Edit the file here, never in a repo.
 
 ## One-time setup
 
@@ -151,8 +159,8 @@ git tag -f v1 && git push -f origin v1     # ship it to every repo
 
 1. Add its directory name to `REPOS` in `config/repos.env`.
 2. Copy the thin callers from an existing repo; set `runs-on`.
-3. `bin/sync-managed.sh -C ../<repo>` and point its husky `commit-msg` hook at
-   `scripts/release/validate-conventional-subject.sh`.
+3. Copy tracebim-api's `.husky/commit-msg`, which runs the validator from
+   `../tracebim-ci` (see Managed files).
 4. Give it `.github/actions.env` with only its own keys (at least
    `AUTO_PROJECT_NUMBER`) and `npm` scripts for the tools:
    ```json

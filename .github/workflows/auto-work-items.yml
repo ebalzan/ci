@@ -1,0 +1,82 @@
+# =============================================================================
+# Auto Create Work Items (reusable) — project-board automation for feature
+# branches.
+#
+# The caller triggers this on every push to a non-main/non-dev branch; it
+# creates or updates the tracking issue + PR + Projects (v2) metadata for that
+# branch (actions/auto-work-items). Purely dev-side tooling: it never touches
+# builds, releases, or deployments.
+#
+# Every AUTO_* knob the script reads is wired below from `vars`, which in a
+# reusable workflow are the CALLER repo's variables — the merged shared + repo
+# config that bin/gh-bootstrap.sh pushed. An unset variable arrives empty and the
+# script falls back to its code default, so any repo can set or override any
+# knob without touching this file.
+#
+# Secrets are passed explicitly by the caller (not `secrets: inherit`, which is
+# only guaranteed within one organization/enterprise):
+#   ANTHROPIC_API_KEY   describes the issue/PR (optional: falls back to a stub)
+#   GH_PROJECT_TOKEN    classic PAT, `project` + `repo` scopes. A fine-grained
+#                       PAT cannot reach a board owned by a personal account.
+#                       Falls back to GITHUB_TOKEN (no board writes then).
+# See docs/AUTO_WORK_ITEMS_WORKFLOW.md.
+#
+# Caller must grant: contents: read, issues: write, pull-requests: write,
+# repository-projects: write.
+# =============================================================================
+name: Auto Create Work Items
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner label for the job.
+        type: string
+        default: ubuntu-latest
+      base-branch:
+        description: Branch the feature PR targets.
+        type: string
+        default: dev
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      GH_PROJECT_TOKEN:
+        required: false
+
+jobs:
+  create-and-sync-work-items:
+    name: Create and sync work items
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      repository-projects: write
+    concurrency:
+      group: auto-work-items-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      AUTO_PROJECT_NUMBER: ${{ vars.AUTO_PROJECT_NUMBER }}
+      AUTO_PROJECT_OWNER: ${{ vars.AUTO_PROJECT_OWNER }}
+      AUTO_MILESTONE_TITLE: ${{ vars.AUTO_MILESTONE_TITLE }}
+      AUTO_MILESTONE_NUMBER: ${{ vars.AUTO_MILESTONE_NUMBER }}
+      AUTO_ISSUE_LABELS: ${{ vars.AUTO_ISSUE_LABELS }}
+      AUTO_PR_LABELS: ${{ vars.AUTO_PR_LABELS }}
+      AUTO_DEFAULT_PRIORITY: ${{ vars.AUTO_DEFAULT_PRIORITY }}
+      AUTO_PRIORITY_MAP_JSON: ${{ vars.AUTO_PRIORITY_MAP_JSON }}
+      AUTO_DEFAULT_SIZE: ${{ vars.AUTO_DEFAULT_SIZE }}
+      AUTO_SIZE_MAP_JSON: ${{ vars.AUTO_SIZE_MAP_JSON }}
+      AUTO_DEFAULT_ESTIMATE: ${{ vars.AUTO_DEFAULT_ESTIMATE }}
+      AUTO_ESTIMATE_MAP_JSON: ${{ vars.AUTO_ESTIMATE_MAP_JSON }}
+      AUTO_START_DATE_OFFSET_DAYS: ${{ vars.AUTO_START_DATE_OFFSET_DAYS }}
+      AUTO_TARGET_DATE_OFFSET_DAYS: ${{ vars.AUTO_TARGET_DATE_OFFSET_DAYS }}
+      AUTO_STRICT_METADATA: ${{ vars.AUTO_STRICT_METADATA }}
+      AUTO_DESCRIBE_MODEL: ${{ vars.AUTO_DESCRIBE_MODEL }}
+      AUTO_DESCRIBE_EFFORT: ${{ vars.AUTO_DESCRIBE_EFFORT }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      # Same tag as this workflow's: bump both together (see README "Releasing").
+      - uses: ebalzan/tracebim-ci/actions/auto-work-items@v1
+        with:
+          github-token: ${{ secrets.GH_PROJECT_TOKEN || github.token }}
