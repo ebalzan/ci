@@ -1,0 +1,62 @@
+# =============================================================================
+# Release — every push to main releases tracebim-ci and ships it to the repos.
+#
+#   1. release:    the reusable release.yml (local path) bumps package.json,
+#                  commits "chore(release): X.Y.Z", tags vX.Y.Z, creates the
+#                  GitHub Release and points dev at the release commit.
+#   2. major-tag:  force-moves the major tag (v1 for v1.4.0) to the release
+#                  commit. Every repo pins @v1, so this is the step that ships
+#                  the change to them; vX.Y.Z stays put for rollback.
+#
+# A breaking change (`!` / BREAKING CHANGE) releases v2.0.0 and creates v2
+# without touching v1, so repos on @v1 are unaffected. The internal action refs
+# still say @v1 at that point (a PR saying @v2 could not run its own checks
+# before v2 existed); major-tag warns, and a follow-up PR switching them to @v2
+# releases v2.0.1 with the refs consistent. Repos then move to @v2 one by one.
+#
+# Rollback: git tag -f v1 v1.3.0 && git push -f origin v1
+# =============================================================================
+name: Release
+
+on:
+  push:
+    branches: ['main']
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+
+  major-tag:
+    name: Move the major tag
+    needs: release
+    # `tag` is empty when nothing was released (the release commit's own run).
+    if: ${{ needs.release.result == 'success' && needs.release.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.sha }}
+
+      - name: Point the major tag at the release
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+          SHA: ${{ needs.release.outputs.sha }}
+        run: |
+          major="${TAG%%.*}"
+          git tag -f "$major" "$SHA"
+          git push -f origin "refs/tags/$major"
+          echo "$major → $TAG (${SHA})"
+
+          # The reusable workflows reach their actions as
+          # <this repo>/actions/<name>@vN; at the new major they must say @$major.
+          stale="$(grep -rnoE "${GITHUB_REPOSITORY}/[^@[:space:]]+@v[0-9]+" .github/workflows | grep -v "@${major}\$" || true)"
+          if [ -n "$stale" ]; then
+            echo "::warning::$major was created, but the internal action refs do not say @$major yet. Open a PR changing them to @$major (it releases a patch with consistent refs) before moving any repo to @$major:"
+            echo "$stale"
+          fi
