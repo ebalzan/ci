@@ -28,7 +28,7 @@ actions/                    composite actions the reusable workflows run
 scripts/release/            release-main, promote-dev-to-main, release-utils, verify-pr-release-type
 managed/                    files repos' local tooling runs (the commit-msg validator)
 config/
-  actions.env               shared variables            (committed)
+  actions.env               shared variables, read at run time (committed)
   secrets.env               shared repository secrets   (gitignored; .example committed)
   repos.env                 the repos --all acts on, and this repo's slug
 bin/
@@ -89,7 +89,7 @@ documented in each workflow's header.
 ## Config: shared vs repo
 
 ```text
-tracebim-ci/config/actions.env    +  <repo>/.github/actions.env       → repository variables
+tracebim-ci/config/actions.env    +  <repo>/.github/actions.env       → variables (shared: read at run time)
 tracebim-ci/config/secrets.env    +  <repo>/.github/secrets.env       → repository secrets
 tracebim-ci/config/secrets.X.env  +  <repo>/.github/secrets.X.env     → environment X secrets
          shared (lower)                    repo (wins)
@@ -100,9 +100,12 @@ bin/gh-bootstrap.sh --all --dry-run   # shows each key as shared / repo / overri
 bin/gh-bootstrap.sh --all --prune     # push, and delete what no file defines any more
 ```
 
-Personal accounts have no org-level Actions config, so "shared" means "merged
-into every repo at sync time". Re-run after changing a shared value. Full
-rules: [docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md).
+Shared **variables** are never copied onto repos: the actions read
+`config/actions.env` from the tracebim-ci they run from (`@v1`) and fill what
+the repo leaves unset, so a shared variable changes when v1 moves. Shared
+**secrets** cannot be committed, so the bootstrap still merges them into every
+repo — re-run it after changing one. Full rules:
+[docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md).
 
 ## Managed files
 

@@ -19,8 +19,8 @@
 # Note that gh-bootstrap.sh strips a _FILE suffix when it sets a secret, so
 # FOO_FILE in a dotenv file is named FOO on GitHub.
 #
-# Re-running gh-bootstrap.sh after a reset restores the merged shared + repo
-# config. To remove only keys that no file defines any more, prefer
+# Re-running gh-bootstrap.sh after a reset restores the repo's variables and
+# the merged shared + repo secrets. To remove only keys that no file defines any more, prefer
 # `gh-bootstrap.sh --prune`, which works out the stale set for you.
 #
 # Usage:

@@ -70,8 +70,9 @@ environment  >  repository
 ```
 
 (GitHub has a third, wider scope — organization — but these repos are owned
-by a personal account, which has no org-level Actions config. That is the
-whole reason tracebim-ci's "shared" layer is a sync-time merge: see §2.)
+by a personal account, which has no org-level Actions config. That is why
+tracebim-ci's "shared" layer is read at run time for variables and merged in
+at sync time for secrets: see §2.)
 
 So defining e.g. `EC2_INSTANCE_ID` at the repo _and_ on the `production`
 environment means `environment: production` jobs get the environment value
@@ -99,13 +100,15 @@ independent.
 ```text
                   tracebim-ci/config/            <repo>/.github/
                   (shared, lower precedence)     (repo, wins)
-variables         actions.env               +    actions.env              → repository variables
+variables         actions.env               +    actions.env              → shared read at run time; repo's → repository variables
 repo secrets      secrets.env               +    secrets.env              → repository secrets
 env secrets       secrets.<env>.env         +    secrets.<env>.env        → environment <env> secrets
 ```
 
-`bin/gh-bootstrap.sh` merges the two columns key by key — **the repo's value
-wins** — and writes the result onto the repository. So a repo can:
+The two columns combine key by key — **the repo's value wins**. For secrets,
+`bin/gh-bootstrap.sh` merges them and writes the result onto the repository.
+For variables it pushes only the repo's column; the shared one is read at run
+time (below). So a repo can:
 
 - **inherit** a shared key by not mentioning it;
 - **override** it by setting the same key in its own file;
@@ -116,12 +119,26 @@ The dry run labels every key `shared`, `repo`, `repo (overrides shared)` or
 `repo (same as shared: redundant)` — delete the redundant ones from the repo's
 file so the repo keeps only what is really its own.
 
-**Why the merge happens at sync time.** A personal account has no org-level
-Actions config, so the values must physically exist on every repository
-anyway. Merging at sync time means each repo's Settings page shows exactly the
-value its workflows get, and repo-only workflows can read shared variables
-too. The price: after changing a shared value, re-run `bin/gh-bootstrap.sh
---all` — nothing propagates by itself.
+**Shared variables are read at run time.** In a reusable workflow `vars` are
+the caller repo's, and a personal account has no org-level config to fall back
+on — but `config/actions.env` is committed, and the runner downloads the whole
+of tracebim-ci for `uses: ebalzan/tracebim-ci/actions/…@v1`. So the actions
+(`actions/auto-work-items/src/sharedVars.ts`, also used by
+`scripts/release/promote-dev-to-main.mjs`) load that file and fill every key
+the repo leaves unset. Consequences:
+
+- A shared variable changes when it is released and **v1 moves** — no
+  bootstrap run, and nothing stale is left on any repo.
+- A repo's Settings page shows only its own variables; the run log line
+  `Shared variables from config/actions.env: …` lists what was filled.
+- Only the shared actions see shared variables. A workflow that lives in a repo
+  and reads `vars.X` itself must have `X` in that repo's `actions.env`.
+- An empty repo variable counts as unset, so a repo cannot blank out a shared
+  value — override it with a real one.
+
+**Shared secrets are merged at sync time** — they are not committed, so there
+is nothing to read at run time. After changing one, re-run
+`bin/gh-bootstrap.sh --all`.
 
 **Removing a key** from a file does not delete it on GitHub. `--prune` deletes
 every variable/secret in a synced scope that no layer defines (after listing

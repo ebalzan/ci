@@ -5,8 +5,8 @@
 #
 # Layers, lowest precedence first — for any key, the repo's value wins:
 #
-#   variables            tracebim-ci/config/actions.env
-#                        <repo>/.github/actions.env
+#   variables            tracebim-ci/config/actions.env      (read at run time, never pushed)
+#                        <repo>/.github/actions.env          (pushed)
 #   repository secrets   tracebim-ci/config/secrets.env
 #                        <repo>/.github/secrets.env
 #   environment secrets  tracebim-ci/config/secrets.<environment>.env
@@ -17,10 +17,13 @@
 # the repo and synced. Secrets files are gitignored; each has a committed
 # .example beside it.
 #
-# Why sync-time and not a lookup at run time: personal accounts have no
-# org-level Actions config, so the merged values have to live on each repo
-# anyway — and this way the repo's Settings page shows the value its workflows
-# actually get. The cost: after changing a shared value, re-run with --all.
+# Variables vs secrets. Shared VARIABLES are not copied onto repos: the actions
+# read config/actions.env from the copy of tracebim-ci the runner downloads for
+# `uses: …@v1` (actions/auto-work-items/src/sharedVars.ts) and fill only what
+# the repo leaves unset. So a shared variable changes by moving the v1 tag, and
+# only the repo's own keys are pushed — --prune deletes old shared copies.
+# Shared SECRETS cannot work that way (they are not committed), so they are
+# still merged in at sync time: after changing one, re-run with --all.
 #
 # Secret mechanics:
 #   - A KEY ending in _FILE is a path: the secret is set from that file's
@@ -267,7 +270,11 @@ if ! $DRY_RUN; then
   seed_secret_file "$REPO_GITHUB_DIR/secrets.env"
 fi
 
-VARS="$(merge_layers 0 "$SHARED_DIR/actions.env" "$REPO_GITHUB_DIR/actions.env")"
+# ALL_VARS is the merged view, for the plan and the board check; VARS is the
+# repo's own keys — the only variables pushed (see "Variables vs secrets").
+ALL_VARS="$(merge_layers 0 "$SHARED_DIR/actions.env" "$REPO_GITHUB_DIR/actions.env")"
+VARS="$(printf '%s\n' "$ALL_VARS" | awk -F'\t' '$4 != "shared"')"
+RUNTIME_VARS="$(printf '%s\n' "$ALL_VARS" | awk -F'\t' '$4 == "shared" { printf "%s ", $1 }')"
 SECRETS="$(merge_layers 1 "$(secrets_src "$SHARED_DIR/secrets.env")" \
   "$(secrets_src "$REPO_GITHUB_DIR/secrets.env")" | without_local_only)"
 ENVS="$(environments)"
@@ -276,6 +283,7 @@ info ""
 info "${BOLD}Bootstrap Actions config${RESET}   ${DIM}$REPO  ←  $REPO_DIR${RESET}"
 info ""
 printf '%s\n' "$VARS" | grep . | print_plan "repository variables" || true
+[[ -z "$RUNTIME_VARS" ]] || info "  ${DIM}shared variables, read at run time (not pushed): ${RUNTIME_VARS% }${RESET}"
 printf '%s\n' "$SECRETS" | grep . | print_plan "repository secrets" || true
 for env in $ENVS; do
   merge_layers 1 "$(secrets_src "$SHARED_DIR/secrets.$env.env")" \
@@ -324,7 +332,7 @@ done
 
 # ---- verify project board (best effort) --------------------------------------
 var_value() { # var_value NAME — merged variable value
-  local line; line="$(printf '%s\n' "$VARS" | awk -F'\t' -v k="$1" '$1 == k' | head -1)"
+  local line; line="$(printf '%s\n' "$ALL_VARS" | awk -F'\t' -v k="$1" '$1 == k' | head -1)"
   [[ -n "$line" ]] && env_get "$(cut -f2 <<< "$line")" "$1"
 }
 PROJECT_OWNER="$(var_value AUTO_PROJECT_OWNER || true)"

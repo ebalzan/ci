@@ -5,8 +5,9 @@
 # LOCAL path (./), so the workflow file runs at the pushed commit. The actions
 # that workflow uses are still pinned to @v1 — the last release — so a change
 # to an action cannot break the pipeline that ships it (README → Releasing).
-# Every AUTO_* knob is a repository variable: config/actions.env merged with
-# .github/actions.env by `npm run gh:bootstrap`.
+# AUTO_* knobs: .github/actions.env (repository variables, pushed by
+# `npm run gh:bootstrap`), then config/actions.env at the action's v1, read at
+# run time.
 # =============================================================================
 name: Auto Create Work Items
 
