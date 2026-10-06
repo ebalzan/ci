@@ -56,4 +56,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PROJECT_TOKEN || github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPO_VARS_JSON: ${{ toJSON(vars) }}
+          # TRANSITIONAL — remove once v1 includes applyRepoVars (the release after 1.2.0).
+          # tracebim-ci's self-* callers run this workflow at the pushed commit but the
+          # action at v1, whose loader ignores REPO_VARS_JSON. A job-env value wins over
+          # REPO_VARS_JSON, so this is harmless after the release.
+          AUTO_PROJECT_NUMBER: ${{ vars.AUTO_PROJECT_NUMBER }}
           PROMOTION_ASSIGNEE: ${{ github.actor }}
