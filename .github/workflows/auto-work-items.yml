@@ -7,11 +7,11 @@
 # branch (actions/auto-work-items). Purely dev-side tooling: it never touches
 # builds, releases, or deployments.
 #
-# Every AUTO_* knob the script reads is wired below from `vars`, which in a
-# reusable workflow are the CALLER repo's variables — only the repo's own keys.
-# An unset variable arrives empty; the action fills it from config/actions.env
-# at the same ref (shared values), else its code default applies. So any repo
-# can set or override any knob without touching this file.
+# The CALLER repo's variables (`vars`, in a reusable workflow) are passed whole
+# as REPO_VARS_JSON; the action takes their AUTO_* keys. Any knob the repo
+# leaves unset is filled from config/actions.env at the same ref (shared
+# values), else its code default applies. So any repo can set or override any
+# knob — including ones added later — without touching this file.
 #
 # Secrets are passed explicitly by the caller (not `secrets: inherit`, which is
 # only guaranteed within one organization/enterprise):
@@ -57,23 +57,12 @@ jobs:
       cancel-in-progress: true
     env:
       AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
+      # TRANSITIONAL — remove once v1 includes applyRepoVars (the release after 1.2.0).
+      # tracebim-ci's self-* callers run this workflow at the pushed commit but the
+      # action at v1, whose loader ignores REPO_VARS_JSON. A job-env value wins over
+      # REPO_VARS_JSON, so this is harmless after the release.
       AUTO_PROJECT_NUMBER: ${{ vars.AUTO_PROJECT_NUMBER }}
-      AUTO_PROJECT_OWNER: ${{ vars.AUTO_PROJECT_OWNER }}
-      AUTO_MILESTONE_TITLE: ${{ vars.AUTO_MILESTONE_TITLE }}
-      AUTO_MILESTONE_NUMBER: ${{ vars.AUTO_MILESTONE_NUMBER }}
-      AUTO_ISSUE_LABELS: ${{ vars.AUTO_ISSUE_LABELS }}
-      AUTO_PR_LABELS: ${{ vars.AUTO_PR_LABELS }}
-      AUTO_DEFAULT_PRIORITY: ${{ vars.AUTO_DEFAULT_PRIORITY }}
-      AUTO_PRIORITY_MAP_JSON: ${{ vars.AUTO_PRIORITY_MAP_JSON }}
-      AUTO_DEFAULT_SIZE: ${{ vars.AUTO_DEFAULT_SIZE }}
-      AUTO_SIZE_MAP_JSON: ${{ vars.AUTO_SIZE_MAP_JSON }}
-      AUTO_DEFAULT_ESTIMATE: ${{ vars.AUTO_DEFAULT_ESTIMATE }}
-      AUTO_ESTIMATE_MAP_JSON: ${{ vars.AUTO_ESTIMATE_MAP_JSON }}
-      AUTO_START_DATE_OFFSET_DAYS: ${{ vars.AUTO_START_DATE_OFFSET_DAYS }}
-      AUTO_TARGET_DATE_OFFSET_DAYS: ${{ vars.AUTO_TARGET_DATE_OFFSET_DAYS }}
-      AUTO_STRICT_METADATA: ${{ vars.AUTO_STRICT_METADATA }}
-      AUTO_DESCRIBE_MODEL: ${{ vars.AUTO_DESCRIBE_MODEL }}
-      AUTO_DESCRIBE_EFFORT: ${{ vars.AUTO_DESCRIBE_EFFORT }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       # Same tag as this workflow's: bump both together (see README "Releasing").

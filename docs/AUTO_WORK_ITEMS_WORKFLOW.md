@@ -205,12 +205,13 @@ This is useful when metadata is mandatory for your process.
 
 ## Variables and Secret Reference
 
-`auto-work-items.yml` wires every knob the script reads, from the caller
-repo's variables — the repo's `.github/actions.env`, pushed by
-`bin/gh-bootstrap.sh`. A variable the repo leaves unset is filled from
-`config/actions.env` at the action's ref (`src/sharedVars.ts`), else the code
-default applies. So a knob is set in the repo's file (then the bootstrap) or in
-`config/actions.env` (then a release that moves v1):
+`auto-work-items.yml` passes the caller repo's variables whole
+(`REPO_VARS_JSON: ${{ toJSON(vars) }}`) — the repo's `.github/actions.env`,
+pushed by `bin/gh-bootstrap.sh` — and the action takes their `AUTO_*` keys. A
+knob the repo leaves unset is filled from `config/actions.env` at the action's
+ref (`src/sharedVars.ts`), else the code default applies. So a knob is set in
+the repo's file (then the bootstrap) or in `config/actions.env` (then a release
+that moves v1) — never in the workflow:
 
 - `AUTO_BASE_BRANCH` (from the `base-branch` input, default `dev`)
 - `AUTO_ISSUE_LABELS`
@@ -218,7 +219,7 @@ default applies. So a knob is set in the repo's file (then the bootstrap) or in
 - `AUTO_MILESTONE_NUMBER`
 - `AUTO_MILESTONE_TITLE`
 - `AUTO_PROJECT_OWNER`
-- `AUTO_PROJECT_NUMBER`
+- `AUTO_PROJECT_NUMBER` (repo variable — one board per repo)
 - `AUTO_DEFAULT_PRIORITY`
 - `AUTO_PRIORITY_MAP_JSON`
 - `AUTO_DEFAULT_SIZE`
@@ -272,7 +273,8 @@ Important:
 ### "Context access might be invalid"
 
 This warning usually comes from static editor validation, not Actions runtime.
-It is common with `vars.*` and `secrets.*` in workflow `env` blocks.
+It is common with `vars.*` and `secrets.*` in workflow `env` blocks — which is
+why the workflows pass `toJSON(vars)` instead of naming each variable.
 
 ### Common runtime failures
 
