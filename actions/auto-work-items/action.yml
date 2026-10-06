@@ -1,7 +1,7 @@
 # Creates or updates the tracking issue + PR + Projects (v2) metadata for the
 # pushed branch. Called by .github/workflows/auto-work-items.yml, which wires
-# every AUTO_* knob into the job env — this action reads them from there, and
-# fills the empty ones from config/actions.env in its own copy of this repo.
+# the repo's AUTO_PROJECT_NUMBER into the job env — this action fills every
+# other AUTO_* knob from config/actions.env in its own copy of this repo.
 # Needs no checkout: everything it learns about the branch comes from the API.
 name: Auto work items
 description: Create or update the issue, PR and project-board item for a feature branch.

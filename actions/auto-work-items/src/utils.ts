@@ -51,8 +51,8 @@ export function getErrorList(error: unknown): unknown[] {
   return Array.isArray(error.errors) ? error.errors : []
 }
 
-// An unset variable arrives as '' (auto-work-items.yml wires every AUTO_* from
-// `vars`), and Number('') is 0 — so blank must mean "use the fallback".
+// An unset variable may arrive as '' (a workflow wiring an unset `vars.X`),
+// and Number('') is 0 — so blank must mean "use the fallback".
 export function asDateOffset(value: string | undefined, fallback: number): number {
   if (!value?.trim()) return fallback
   const parsed = Number(value)

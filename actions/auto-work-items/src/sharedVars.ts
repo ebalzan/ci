@@ -25,9 +25,10 @@ export function parseEnvFile(text: string): Record<string, string> {
   return vars
 }
 
-// Fill every AUTO_* knob the caller repo leaves unset (the workflow passes an
-// unset variable as '') from config/actions.env. A repo variable always wins;
-// the code defaults still apply to keys neither layer sets.
+// Fill every AUTO_* knob the job env leaves unset (the workflow passes an
+// unset variable as '') from config/actions.env. A value the workflow wires
+// from repo `vars` always wins; the code defaults still apply to keys neither
+// layer sets.
 export function applySharedVars({
   core,
   env,

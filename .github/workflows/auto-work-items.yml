@@ -7,11 +7,11 @@
 # branch (actions/auto-work-items). Purely dev-side tooling: it never touches
 # builds, releases, or deployments.
 #
-# Every AUTO_* knob the script reads is wired below from `vars`, which in a
-# reusable workflow are the CALLER repo's variables — only the repo's own keys.
-# An unset variable arrives empty; the action fills it from config/actions.env
-# at the same ref (shared values), else its code default applies. So any repo
-# can set or override any knob without touching this file.
+# Only AUTO_PROJECT_NUMBER is wired from `vars` (in a reusable workflow, the
+# CALLER repo's variables): it is the one knob that differs per repo. Every
+# other AUTO_* knob comes from config/actions.env at the same ref (shared
+# values), else its code default applies. To let a repo override another knob,
+# wire it here too.
 #
 # Secrets are passed explicitly by the caller (not `secrets: inherit`, which is
 # only guaranteed within one organization/enterprise):

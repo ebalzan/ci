@@ -205,12 +205,12 @@ This is useful when metadata is mandatory for your process.
 
 ## Variables and Secret Reference
 
-`auto-work-items.yml` wires every knob the script reads, from the caller
-repo's variables — the repo's `.github/actions.env`, pushed by
-`bin/gh-bootstrap.sh`. A variable the repo leaves unset is filled from
-`config/actions.env` at the action's ref (`src/sharedVars.ts`), else the code
-default applies. So a knob is set in the repo's file (then the bootstrap) or in
-`config/actions.env` (then a release that moves v1):
+`auto-work-items.yml` wires only `AUTO_PROJECT_NUMBER` from the caller repo's
+variables — the repo's `.github/actions.env`, pushed by `bin/gh-bootstrap.sh`.
+Every other knob is filled from `config/actions.env` at the action's ref
+(`src/sharedVars.ts`), else the code default applies. So a knob is set in
+`config/actions.env` (then a release that moves v1); for a repo to override
+one, wire it from `vars` in `auto-work-items.yml` first:
 
 - `AUTO_BASE_BRANCH` (from the `base-branch` input, default `dev`)
 - `AUTO_ISSUE_LABELS`
@@ -218,7 +218,7 @@ default applies. So a knob is set in the repo's file (then the bootstrap) or in
 - `AUTO_MILESTONE_NUMBER`
 - `AUTO_MILESTONE_TITLE`
 - `AUTO_PROJECT_OWNER`
-- `AUTO_PROJECT_NUMBER`
+- `AUTO_PROJECT_NUMBER` (repo variable — one board per repo)
 - `AUTO_DEFAULT_PRIORITY`
 - `AUTO_PRIORITY_MAP_JSON`
 - `AUTO_DEFAULT_SIZE`
