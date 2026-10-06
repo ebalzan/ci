@@ -57,8 +57,8 @@ function getErrorList(error) {
         return [];
     return Array.isArray(error.errors) ? error.errors : [];
 }
-// An unset variable arrives as '' (auto-work-items.yml wires every AUTO_* from
-// `vars`), and Number('') is 0 — so blank must mean "use the fallback".
+// A blank value (e.g. an empty repo variable) must mean "use the fallback":
+// Number('') is 0.
 function asDateOffset(value, fallback) {
     if (!value?.trim())
         return fallback;

@@ -51,8 +51,8 @@ export function getErrorList(error: unknown): unknown[] {
   return Array.isArray(error.errors) ? error.errors : []
 }
 
-// An unset variable may arrive as '' (a workflow wiring an unset `vars.X`),
-// and Number('') is 0 — so blank must mean "use the fallback".
+// A blank value (e.g. an empty repo variable) must mean "use the fallback":
+// Number('') is 0.
 export function asDateOffset(value: string | undefined, fallback: number): number {
   if (!value?.trim()) return fallback
   const parsed = Number(value)

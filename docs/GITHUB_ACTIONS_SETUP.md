@@ -131,8 +131,9 @@ the repo leaves unset. Consequences:
   bootstrap run, and nothing stale is left on any repo.
 - A repo's Settings page shows only its own variables; the run log line
   `Shared variables from config/actions.env: …` lists what was filled.
-- A repo variable overrides a shared one only where the workflow wires it from
-  `vars` — for auto-work-items that is `AUTO_PROJECT_NUMBER` alone.
+- The shared workflows pass the repo's variables whole
+  (`REPO_VARS_JSON: ${{ toJSON(vars) }}`), so any `AUTO_*` key a repo sets
+  reaches the actions with no workflow edit.
 - Only the shared actions see shared variables. A workflow that lives in a repo
   and reads `vars.X` itself must have `X` in that repo's `actions.env`.
 - An empty repo variable counts as unset, so a repo cannot blank out a shared

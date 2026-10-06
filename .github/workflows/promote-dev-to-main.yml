@@ -55,7 +55,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PROJECT_TOKEN || github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          AUTO_PROJECT_NUMBER: ${{ vars.AUTO_PROJECT_NUMBER }}
-          AUTO_PROJECT_OWNER: ${{ vars.AUTO_PROJECT_OWNER }}
-          AUTO_MILESTONE_TITLE: ${{ vars.AUTO_MILESTONE_TITLE }}
+          REPO_VARS_JSON: ${{ toJSON(vars) }}
           PROMOTION_ASSIGNEE: ${{ github.actor }}

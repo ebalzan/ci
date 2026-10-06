@@ -7,11 +7,11 @@
 # branch (actions/auto-work-items). Purely dev-side tooling: it never touches
 # builds, releases, or deployments.
 #
-# Only AUTO_PROJECT_NUMBER is wired from `vars` (in a reusable workflow, the
-# CALLER repo's variables): it is the one knob that differs per repo. Every
-# other AUTO_* knob comes from config/actions.env at the same ref (shared
-# values), else its code default applies. To let a repo override another knob,
-# wire it here too.
+# The CALLER repo's variables (`vars`, in a reusable workflow) are passed whole
+# as REPO_VARS_JSON; the action takes their AUTO_* keys. Any knob the repo
+# leaves unset is filled from config/actions.env at the same ref (shared
+# values), else its code default applies. So any repo can set or override any
+# knob — including ones added later — without touching this file.
 #
 # Secrets are passed explicitly by the caller (not `secrets: inherit`, which is
 # only guaranteed within one organization/enterprise):
@@ -57,7 +57,7 @@ jobs:
       cancel-in-progress: true
     env:
       AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
-      AUTO_PROJECT_NUMBER: ${{ vars.AUTO_PROJECT_NUMBER }}
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       # Same tag as this workflow's: bump both together (see README "Releasing").
