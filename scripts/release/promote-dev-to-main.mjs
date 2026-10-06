@@ -292,8 +292,8 @@ function buildBody({ nextTag, releaseType, commits }) {
 }
 
 async function main() {
-  // AUTO_PROJECT_OWNER / AUTO_MILESTONE_TITLE the caller repo leaves unset come
-  // from config/actions.env — the same loader auto-work-items uses.
+  // AUTO_* from the caller repo's variables (REPO_VARS_JSON), the rest from
+  // config/actions.env — the same loader auto-work-items uses.
   sharedVars.applySharedVars({ core: { info: log, warning: log }, env: process.env })
 
   const { owner, repo } = parseRepositorySlug(process.env.GITHUB_REPOSITORY)
