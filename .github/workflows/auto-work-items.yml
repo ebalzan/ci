@@ -8,10 +8,10 @@
 # builds, releases, or deployments.
 #
 # Every AUTO_* knob the script reads is wired below from `vars`, which in a
-# reusable workflow are the CALLER repo's variables — the merged shared + repo
-# config that bin/gh-bootstrap.sh pushed. An unset variable arrives empty and the
-# script falls back to its code default, so any repo can set or override any
-# knob without touching this file.
+# reusable workflow are the CALLER repo's variables — only the repo's own keys.
+# An unset variable arrives empty; the action fills it from config/actions.env
+# at the same ref (shared values), else its code default applies. So any repo
+# can set or override any knob without touching this file.
 #
 # Secrets are passed explicitly by the caller (not `secrets: inherit`, which is
 # only guaranteed within one organization/enterprise):

@@ -206,10 +206,11 @@ This is useful when metadata is mandatory for your process.
 ## Variables and Secret Reference
 
 `auto-work-items.yml` wires every knob the script reads, from the caller
-repo's variables — the merged result of `config/actions.env` and the repo's
-`.github/actions.env` that `bin/gh-bootstrap.sh` pushed. An unset variable
-arrives empty and the code default applies, so setting a knob in either file
-(then re-running the bootstrap) is all it takes:
+repo's variables — the repo's `.github/actions.env`, pushed by
+`bin/gh-bootstrap.sh`. A variable the repo leaves unset is filled from
+`config/actions.env` at the action's ref (`src/sharedVars.ts`), else the code
+default applies. So a knob is set in the repo's file (then the bootstrap) or in
+`config/actions.env` (then a release that moves v1):
 
 - `AUTO_BASE_BRANCH` (from the `base-branch` input, default `dev`)
 - `AUTO_ISSUE_LABELS`

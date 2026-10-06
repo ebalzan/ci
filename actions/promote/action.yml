@@ -2,7 +2,8 @@
 # scripts/release/promote-dev-to-main.mjs from this repo against the CALLER's
 # checkout (it reads the caller's package.json for the current version).
 # Configuration comes from the job env: GITHUB_TOKEN, GITHUB_REPOSITORY,
-# AUTO_PROJECT_NUMBER/OWNER, AUTO_MILESTONE_TITLE, PROMOTION_ASSIGNEE.
+# AUTO_PROJECT_NUMBER/OWNER, AUTO_MILESTONE_TITLE, PROMOTION_ASSIGNEE. AUTO_*
+# keys left empty are filled from this repo's config/actions.env.
 name: Promote dev to main
 description: Open or update the dev → main promotion PR.
 runs:

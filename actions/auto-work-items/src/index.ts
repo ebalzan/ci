@@ -6,6 +6,7 @@ import { ensureLabels } from './labels'
 import { resolveMilestoneNumber } from './milestone'
 import { upsertPr } from './pr'
 import { syncProjectMetadata } from './project'
+import { applySharedVars } from './sharedVars'
 import type { CoreClient, GitHubClient, WorkflowContext } from './types'
 
 async function runAutoWorkItems({
@@ -17,6 +18,7 @@ async function runAutoWorkItems({
   context: WorkflowContext
   core: CoreClient
 }): Promise<void> {
+  applySharedVars({ core, env: process.env })
   const config = buildConfig({ context, core, env: process.env })
   if (config.skip) return
 

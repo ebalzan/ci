@@ -8,7 +8,9 @@ const labels_1 = require("./labels");
 const milestone_1 = require("./milestone");
 const pr_1 = require("./pr");
 const project_1 = require("./project");
+const sharedVars_1 = require("./sharedVars");
 async function runAutoWorkItems({ github, context, core, }) {
+    (0, sharedVars_1.applySharedVars)({ core, env: process.env });
     const config = (0, config_1.buildConfig)({ context, core, env: process.env });
     if (config.skip)
         return;
