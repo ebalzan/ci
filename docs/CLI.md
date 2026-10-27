@@ -34,18 +34,18 @@ Adds everything a repo needs, on a branch, and opens it for review.
 ebalzan-ci onboard [-C DIR] [options]
 ```
 
-| Option                  | Default                   | Effect                                                                   |
-| ----------------------- | ------------------------- | ------------------------------------------------------------------------ |
-| `-C, --repo-dir DIR`    | `.`                       | Checkout of the repo to onboard                                          |
-| `-R, --repo OWNER/REPO` | from the git remote       | Its slug                                                                 |
-| `--runs-on LABEL`       | `ubuntu-latest`           | Runner label written into every caller (e.g. `self-hosted`)              |
-| `--ref REF`             | `v<major of the package>` | Ref the callers pin (`v2`, `v2.3.1`, a branch to try unreleased changes) |
-| `--branch NAME`         | `ci/onboard-ebalzan-ci`   | Branch the files are committed on                                        |
-| `--force`               | off                       | Replace files that already exist (default: keep them)                    |
-| `--no-npm`              | off                       | Do not install the package and husky, even with a `package.json`         |
-| `--no-push`             | off                       | Stop after the local commit: GitHub is not touched at all                |
-| `-n, --dry-run`         | off                       | Print the plan; change nothing                                           |
-| `-y, --yes`             | off                       | No confirmation prompts (also for the bootstrap it runs)                 |
+| Option                  | Default                   | Effect                                                                                                                                                  |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-C, --repo-dir DIR`    | `.`                       | Checkout of the repo to onboard                                                                                                                         |
+| `-R, --repo OWNER/REPO` | from the git remote       | Its slug                                                                                                                                                |
+| `--runs-on LABEL`       | `ubuntu-latest`           | Runner label written into every caller (e.g. `self-hosted`)                                                                                             |
+| `--ref REF`             | `v<major of the package>` | Ref the callers pin. Keep the major tag (`v2`); an exact version only freezes the workflow files ([why](ARCHITECTURE.md#9-versions-what-a-pin-freezes)) |
+| `--branch NAME`         | `ci/onboard-ebalzan-ci`   | Branch the files are committed on                                                                                                                       |
+| `--force`               | off                       | Replace files that already exist (default: keep them)                                                                                                   |
+| `--no-npm`              | off                       | Do not install the package and husky, even with a `package.json`                                                                                        |
+| `--no-push`             | off                       | Stop after the local commit: GitHub is not touched at all                                                                                               |
+| `-n, --dry-run`         | off                       | Print the plan; change nothing                                                                                                                          |
+| `-y, --yes`             | off                       | No confirmation prompts (also for the bootstrap it runs)                                                                                                |
 
 What it does, in order:
 

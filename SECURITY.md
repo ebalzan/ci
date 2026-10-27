@@ -8,8 +8,11 @@ vulnerability** on <https://github.com/ebalzan/ci>. Do not open a public issue.
 ## What to be aware of when using this
 
 - **Callers run this repo's code with their tokens.** A workflow pinned to
-  `@v2` runs whatever `v2` points at. To audit what you run, pin a full commit
-  SHA or an exact release (`@v2.3.1`) instead.
+  `@v2` runs whatever `v2` points at. Pinning `@v2.3.1` or a commit SHA does
+  **not** freeze that code: it freezes the workflow file, but the actions
+  inside it are referenced as `@v2`
+  ([docs/ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-versions-what-a-pin-freezes)).
+  To control exactly what runs, fork the repo and call your fork.
 - **`GH_PROJECT_TOKEN` is a classic PAT** with `repo` scope, which reaches every
   repository the account can access. Give it a short expiry, and reissue rather
   than extend. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#secrets).

@@ -125,14 +125,13 @@ For each repo (e.g. `tracebim-api`), on a `ci/…` branch:
    ```
 
    Replace `.husky/commit-msg` with [templates/.husky/commit-msg](../templates/.husky/commit-msg)
-   (placeholders: `ebalzan/ci`, `ci`, `@ebalzan/ci`), delete any local copy of
-   `scripts/release/validate-conventional-subject.sh`, and change the npm
-   scripts:
+   (placeholders: `ebalzan/ci`, `ci`, `@ebalzan/ci`), and delete any local copy
+   of `scripts/release/validate-conventional-subject.sh`.
 
-   ```json
-   "gh:bootstrap": "ebalzan-ci bootstrap",
-   "gh:reset": "ebalzan-ci reset"
-   ```
+   **Remove the `gh:bootstrap` and `gh:reset` npm scripts.** In v2 the admin
+   commands run from your ebalzan/ci checkout (`npm run gh:bootstrap -- -R
+owner/repo` or `--all`) or with `npx @ebalzan/ci bootstrap`, so the repo
+   needs none ([ARCHITECTURE.md §6–7](ARCHITECTURE.md#6-packagejson)).
 
    Repo scripts that sourced `${TRACEBIM_CI_DIR:-../tracebim-ci}/bin/_lib.sh`
    become `source "$(npx --no-install ebalzan-ci path)/bin/_lib.sh"`.

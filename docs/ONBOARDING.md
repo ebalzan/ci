@@ -117,10 +117,18 @@ yourself later), `--force` to replace files the repo already has. All options:
 
 ## After onboarding
 
+What is shared and what is now the repo's own, stage by stage:
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
+- **Ignore the secrets files before creating any.** `onboard` does not edit
+  `.gitignore`; add `/.github/secrets.env`, `/.github/secrets.*.env` and
+  `!/.github/secrets*.env.example`.
 - **Add the repo's own checks** to `pr-checks.yml` — the template has a
   commented `check` job. They run in parallel with `title`.
 - **Add the deploy** to `release.yml` — the template has a commented `deploy`
-  job. Gate it with `if: needs.release.outputs.tag != ''`.
+  job. Gate it with `if: needs.release.outputs.tag != ''`. For anything beyond
+  a one-liner, use a repo-local `deploy.yml` plus a manual `redeploy.yml`:
+  [ARCHITECTURE.md §4](ARCHITECTURE.md#4-deploys-are-yours).
 - **A board?** Set `AUTO_PROJECT_NUMBER` in `.github/actions.env` and re-run
   `ebalzan-ci bootstrap`. The board needs the fields listed in
   [CONFIGURATION.md](CONFIGURATION.md#project-board).

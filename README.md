@@ -110,6 +110,11 @@ Full walkthrough and the manual alternative: [docs/ONBOARDING.md](docs/ONBOARDIN
 Every rule can be overridden per repo, in that repo — see
 [Configuration](#configuration-in-one-minute).
 
+**What stays in each repo:** the four small caller files (two identical
+everywhere, two with the repo's own jobs added), its build/test jobs, its
+deploy, and its own variables and secrets. Which file is which, what runs
+where, and how to structure a deploy: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ---
 
 ## Using the workflows by hand
@@ -227,7 +232,8 @@ same thing in both places:
 
 - **Callers pin a major tag**: `uses: ebalzan/ci/…@v2`. Every release moves
   `v2` to it, so fixes and new features reach every repo with no change on
-  their side. Pin `@v2.3.1` instead to freeze a repo.
+  their side. Pinning `@v2.3.1` or a SHA freezes only the workflow file — the
+  actions inside it still follow `v2` ([why](docs/ARCHITECTURE.md#9-versions-what-a-pin-freezes)).
 - **The npm package** `@ebalzan/ci` has the same version as the tag.
 - **Breaking changes** (a removed input, a new required permission or secret, a
   renamed variable) only ever ship as a new major (`v3`). `v2` stays where it is,
@@ -262,6 +268,7 @@ Upgrading from the private `tracebim-ci` v1: [docs/MIGRATION.md](docs/MIGRATION.
 
 | Doc                                                          | Covers                                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| [ARCHITECTURE](docs/ARCHITECTURE.md)                         | What is shared vs repo-specific, what runs where, deploys, design decisions    |
 | [ONBOARDING](docs/ONBOARDING.md)                             | Adding a repo with `onboard`, or by hand; what each generated file is for      |
 | [CI_FLOW](docs/CI_FLOW.md)                                   | Branch → `dev` → `main` → release, stage by stage; bump rules; troubleshooting |
 | [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                         | Commit types, PR titles, versioning, for people writing commits                |
