@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset: keeps the lint, format, git-hook and compiler tooling on the same versions in every TraceBIM-CE repo. Repos extend it as github>ebalzan/tracebim-ci//renovate/tooling#v1.",
+  "extends": ["config:recommended"],
+  "baseBranchPatterns": ["dev"],
+  "branchPrefix": "chore/renovate-",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "rangeStrategy": "pin",
+  "minimumReleaseAge": "3 days",
+  "schedule": ["before 9am on monday"],
+  "dependencyDashboard": true,
+  "packageRules": [
+    {
+      "description": "Only the shared tooling below is managed; every other dependency (framework, runtime, GitHub Actions) stays manual.",
+      "matchPackageNames": ["*"],
+      "enabled": false
+    },
+    {
+      "description": "One PR per repo for the shared tooling (majors get their own PR). chore keeps the branch type and the PR title in step for pr-title.",
+      "matchPackageNames": [
+        "prettier",
+        "eslint",
+        "@eslint/js",
+        "eslint-config-prettier",
+        "eslint-plugin-prettier",
+        "typescript-eslint",
+        "lint-staged",
+        "husky",
+        "typescript"
+      ],
+      "groupName": "dev tooling",
+      "semanticCommitType": "chore",
+      "enabled": true
+    },
+    {
+      "description": "typescript-eslint (direct in tracebim-api, through eslint-config-next and eslint-config-expo elsewhere) only supports typescript <6.1. Raise this once it does.",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1"
+    }
+  ]
+}
