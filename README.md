@@ -27,6 +27,7 @@ actions/                    composite actions the reusable workflows run
   pr-title/  promote/  release/
 scripts/release/            release-main, promote-dev-to-main, release-utils, verify-pr-release-type
 managed/                    files repos' local tooling runs (the commit-msg validator)
+renovate/tooling.json       shared Renovate preset: dev tooling on the same versions everywhere
 config/
   actions.env               shared variables, read at run time (committed)
   secrets.env               shared repository secrets   (gitignored; .example committed)
@@ -122,6 +123,32 @@ verbatim copy at the same path (`bin/sync-managed.sh -C <repo> --install`);
 this repo is private, so it cannot be npm-installed instead.
 `bin/sync-managed.sh --all` refreshes existing copies, and the PR-title check
 fails while one differs. Edit the file here, never in a repo.
+
+## Dev tooling versions (Renovate)
+
+`renovate/tooling.json` keeps Prettier, ESLint (with `@eslint/js`,
+`typescript-eslint` and the Prettier plugin/config), lint-staged, husky and
+TypeScript on the same versions in every repo. Each repo's `renovate.json`
+extends it:
+
+```json
+{ "extends": ["github>ebalzan/tracebim-ci//renovate/tooling#v1"] }
+```
+
+- **What it opens:** every Monday, one `chore(deps): update dev tooling` PR
+  into `dev` per repo (majors get a separate PR), from a `chore/renovate-*`
+  branch so `pr-title` accepts it. Merge it like any other PR. Every other
+  dependency is left alone.
+- **Exceptions** go in the repo's own `renovate.json` as `allowedVersions`
+  rules (e.g. `eslint` `<10` while `eslint-plugin-react` lacks ESLint 10
+  support). A cap every repo needs (the `typescript` cap from
+  `typescript-eslint`) lives in the preset.
+- **Work items skip Renovate branches** (`auto-work-items.yml`), since Renovate
+  owns those PRs' titles and bodies.
+- **Setup:** install the Renovate GitHub App on this repo (it reads the preset
+  from here) and every repo that extends it. Renovate reads each repo's
+  `renovate.json` from its default branch, so it starts working once the file
+  is promoted to `main`; a preset change reaches the repos when `v1` moves.
 
 ## One-time setup
 
