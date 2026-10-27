@@ -1,5 +1,5 @@
 # =============================================================================
-# Auto Create Work Items — tracebim-ci's own feature branches.
+# Auto Create Work Items — this repo's own feature branches.
 #
 # Same as every repo's auto-pr.yml, except it calls the reusable workflow by
 # LOCAL path (./), so the workflow file runs at the pushed commit. The actions

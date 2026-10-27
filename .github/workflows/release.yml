@@ -2,9 +2,10 @@
 # Release (reusable) — every push to main becomes a versioned release.
 #
 #   1. release:  actions/release computes the next semver from Conventional
-#                Commit history, bumps package.json, commits
-#                "chore(release): X.Y.Z", tags vX.Y.Z and creates the GitHub
-#                Release. (The `if:` guard stops the run that commit triggers
+#                Commit history, bumps package.json (when the repo has one),
+#                commits "chore(release): X.Y.Z", tags vX.Y.Z and creates the
+#                GitHub Release. A repo without package.json is released
+#                tag-only: no commit, just the tag and the Release. (The `if:` guard stops the run that commit triggers
 #                from releasing again.)
 #   2. sync-dev: points dev at the release commit (see below).
 #
@@ -14,7 +15,7 @@
 #
 #   jobs:
 #     release:
-#       uses: ebalzan/tracebim-ci/.github/workflows/release.yml@v1
+#       uses: ebalzan/ci/.github/workflows/release.yml@v2
 #     deploy:
 #       needs: release
 #       if: ${{ needs.release.outputs.tag != '' }}
@@ -76,7 +77,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - id: release
-        uses: ebalzan/tracebim-ci/actions/release@v1
+        uses: ebalzan/ci/actions/release@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

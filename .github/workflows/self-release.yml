@@ -1,20 +1,24 @@
 # =============================================================================
-# Release — every push to main releases tracebim-ci and ships it to the repos.
+# Release — every push to main releases this repo and ships it to the repos.
 #
 #   1. release:    the reusable release.yml (local path) bumps package.json,
 #                  commits "chore(release): X.Y.Z", tags vX.Y.Z, creates the
 #                  GitHub Release and points dev at the release commit.
-#   2. major-tag:  force-moves the major tag (v1 for v1.4.0) to the release
-#                  commit. Every repo pins @v1, so this is the step that ships
+#   2. major-tag:  force-moves the major tag (v2 for v2.4.0) to the release
+#                  commit. Every repo pins @v2, so this is the step that ships
 #                  the change to them; vX.Y.Z stays put for rollback.
+#   3. npm:        publishes the release commit to npm as @ebalzan/ci, when the
+#                  repo variable NPM_PUBLISH is 'true'. Auth is npm trusted
+#                  publishing (OIDC, no token): README → Publishing to npm.
 #
-# A breaking change (`!` / BREAKING CHANGE) releases v2.0.0 and creates v2
-# without touching v1, so repos on @v1 are unaffected. The internal action refs
-# still say @v1 at that point (a PR saying @v2 could not run its own checks
-# before v2 existed); major-tag warns, and a follow-up PR switching them to @v2
-# releases v2.0.1 with the refs consistent. Repos then move to @v2 one by one.
+# A breaking change (`!` / BREAKING CHANGE) releases vN+1.0.0 and creates that
+# major tag without touching the old one, so repos on the old major are
+# unaffected. The internal action refs still name the old major at that point (a
+# PR naming the new one could not run its own checks before the tag existed);
+# major-tag warns, and a follow-up PR switching them releases a patch with the
+# refs consistent. Repos then move to the new major one by one.
 #
-# Rollback: git tag -f v1 v1.3.0 && git push -f origin v1
+# Rollback: git tag -f v2 v2.3.0 && git push -f origin v2
 # =============================================================================
 name: Release
 
@@ -60,3 +64,28 @@ jobs:
             echo "::warning::$major was created, but the internal action refs do not say @$major yet. Open a PR changing them to @$major (it releases a patch with consistent refs) before moving any repo to @$major:"
             echo "$stale"
           fi
+
+  npm:
+    name: Publish to npm
+    needs: release
+    if: ${{ vars.NPM_PUBLISH == 'true' && needs.release.result == 'success' && needs.release.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1. The package ships its files as
+      # committed (no build step), so there is nothing to install first.
+      - run: npm install -g npm@^11.5.1
+
+      - name: Publish
+        run: npm publish --access public

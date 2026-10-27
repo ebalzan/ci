@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 #
-# sync-managed.sh — refresh repos' local copies of tracebim-ci's managed/ files.
+# sync-managed.sh — refresh repos' local copies of ebalzan/ci's managed/ files.
 #
-# managed/ holds files a repo's local tooling runs — today only the
-# Conventional Commits validator its husky commit-msg hook calls. The preferred
-# setup keeps NO copy: the hook runs it from the sibling ../tracebim-ci checkout
-# (or $TRACEBIM_CI_DIR), as tracebim-api does. A repo that wants the hook to
-# work without that checkout keeps a verbatim copy at <repo>/<path> instead
-# (tracebim-ci is private, so it cannot be npm-installed), and this script
-# keeps those copies current.
+# DEPRECATED since 2.0. managed/ holds files a repo's local tooling runs —
+# today only the Conventional Commits validator behind the husky commit-msg
+# hook. Repos now run it from the npm package (`ebalzan-ci commit-msg`, see
+# templates/.husky/commit-msg) and keep NO copy. This script remains for repos
+# that still keep a verbatim copy at <repo>/<path>: it keeps those copies
+# current until they move to the package. The PR-title check
+# (actions/pr-title) fails on any copy that differs.
 #
 # Only copies that already exist are updated; --install creates missing ones.
-# The PR-title check (actions/pr-title) fails on any copy that differs.
 #
 # Usage:
-#   bin/sync-managed.sh [-C DIR | --all] [--check | --install]
+#   ebalzan-ci sync-managed [-C DIR | --all] [--check | --install]
 #
 # Options:
 #   -C, --repo-dir DIR   Repo checkout to update (default: current directory)
-#   -a, --all            Every repo in config/repos.env
+#   -a, --all            Every repo config/repos.env selects that has a local
+#                        checkout under $CI_REPOS_ROOT
 #       --check          Report differing copies; change nothing (exit 1 on drift)
 #       --install        Also create copies the repo does not have yet
 #   -h, --help           Show this help
@@ -40,14 +40,18 @@ while [[ $# -gt 0 ]]; do
     -a|--all)      ALL=true; shift ;;
     --check)       CHECK=true; shift ;;
     --install)     INSTALL=true; shift ;;
-    -h|--help)     awk 'NR>1 && /^#/{ sub(/^# ?/, ""); print; next } NR>1{ exit }' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)     print_help "${BASH_SOURCE[0]}"; exit 0 ;;
     *)             die "Unknown option: $1 (try --help)" ;;
   esac
 done
 
 if $ALL; then
-  root="${TRACEBIM_REPOS_ROOT:-$(dirname "$CI_ROOT")}"
-  for name in $(env_get "$CI_ROOT/config/repos.env" REPOS); do REPO_DIRS+=("$root/$name"); done
+  require_gh
+  require_auth
+  for slug in $(managed_repos "$CI_ROOT/config/repos.env" "$CI_ROOT"); do
+    dir="$(local_checkout "$slug" "$CI_ROOT")"
+    if [[ -n "$dir" ]]; then REPO_DIRS+=("$dir"); else info "${DIM}$slug — no local checkout, skipped${RESET}"; fi
+  done
 fi
 [[ ${#REPO_DIRS[@]} -gt 0 ]] || REPO_DIRS=(".")
 
@@ -58,7 +62,7 @@ for dir in "${REPO_DIRS[@]}"; do
   while IFS= read -r rel; do
     target="$dir/$rel"
     if [[ ! -f "$target" ]] && ! $INSTALL; then
-      info "  ${DIM}$rel — no local copy (hook runs tracebim-ci directly)${RESET}"; continue
+      info "  ${DIM}$rel — no local copy (the hook runs it from the package)${RESET}"; continue
     fi
     if [[ -f "$target" ]] && cmp -s "$MANAGED_DIR/$rel" "$target"; then
       ok "$rel up to date"; continue
@@ -73,5 +77,5 @@ for dir in "${REPO_DIRS[@]}"; do
   done < <(cd "$MANAGED_DIR" && find . -type f | sed 's#^\./##' | sort)
 done
 
-if $CHECK && [[ "$drift" -ne 0 ]]; then die "Managed files out of date — run bin/sync-managed.sh without --check."; fi
+if $CHECK && [[ "$drift" -ne 0 ]]; then die "Managed files out of date — run sync-managed without --check."; fi
 exit 0

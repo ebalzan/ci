@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
@@ -30,7 +30,7 @@ const TITLE_TYPE_PRECEDENCE = [
 ]
 
 // Commit type → the type label auto-pr.yml puts on feature PRs. Colors and
-// descriptions match TYPE_CONFIG in .github/scripts/auto-work-items/src/config.ts
+// descriptions match TYPE_CONFIG in actions/auto-work-items/src/config.ts
 // so neither automation rewrites the other's labels.
 const TYPE_LABELS = {
   feat: { name: 'feat', color: '1D76DB', description: "Changes for 'feat' branches" },
@@ -84,7 +84,7 @@ async function githubRequest(path, options = {}) {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'tracebim-promote-workflow',
+      'User-Agent': 'ebalzan-ci-promote',
       'X-GitHub-Api-Version': '2022-11-28',
       ...(options.headers || {}),
     },
@@ -115,11 +115,12 @@ async function githubGraphql(query, variables) {
   return result.data
 }
 
+// No tag yet: package.json's version, or 0.0.0 for a repo without one (it is
+// released tag-only, see release-main.mjs).
 function getCurrentVersionFromPackage() {
-  const packageJson = JSON.parse(
-    readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
-  )
-  return packageJson.version
+  const path = join(process.cwd(), 'package.json')
+  if (!existsSync(path)) return '0.0.0'
+  return JSON.parse(readFileSync(path, 'utf8')).version || '0.0.0'
 }
 
 async function getCurrentVersion({ owner, repo }) {

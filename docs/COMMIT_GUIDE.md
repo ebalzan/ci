@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This guide defines the commit conventions every TraceBIM-CE repo follows and how
+This guide defines the commit conventions every repo using ebalzan/ci follows and how
 commits fit into the branch workflow. The full pipeline, stage by stage, is in
 [CI_FLOW.md](CI_FLOW.md).
 
@@ -32,10 +32,10 @@ docs(readme): update setup section
 ci(actions): add pr checks workflow
 ```
 
-The rule is `managed/scripts/release/validate-conventional-subject.sh` in this
-repo. Each repo's husky `commit-msg` hook runs it — from a sibling
-`../tracebim-ci` checkout (or `$TRACEBIM_CI_DIR`), or from a local copy kept in
-sync by `bin/sync-managed.sh` — and the shared PR-title check runs it in CI.
+The rule is `managed/scripts/release/validate-conventional-subject.sh` in
+ebalzan/ci. Each Node repo's husky `commit-msg` hook runs it through the npm
+package (`ebalzan-ci commit-msg`), and the shared PR-title check runs it on
+every PR in CI — so repos without the hook are checked too, at PR time.
 
 ## Allowed Types
 
@@ -59,8 +59,8 @@ Branch prefixes are the same types (`refact/…`); there is no `feature/` or
 1. Keep `type` and `scope` lowercase.
 2. Use imperative description (`add`, `fix`, `update`).
 3. Do not end description with a period.
-4. Prefer specific scope names: the module or area touched (`elements`,
-   `uploads`, `viewer`, `prisma`, `actions`, `deps`).
+4. Prefer specific scope names: the module or area touched (`auth`,
+   `uploads`, `api`, `db`, `actions`, `deps`).
 5. Keep the header at 72 characters or fewer.
 
 ## Typical Developer Flow
@@ -73,7 +73,7 @@ git switch -c feat/your-change
 
 # 2) Commit with conventional format
 git add .
-git commit -m "feat(elements): add public catalog filters"
+git commit -m "feat(search): add result filters"
 
 # 3) Push: the work-items workflow opens a PR into dev with a tracking issue
 git push -u origin feat/your-change
@@ -88,9 +88,10 @@ Release notes and semantic versioning are automatic.
 - The bump is computed by scanning every Conventional Commit since the previous
   tag. Branch names don't affect it, and if no commit is conventional the release
   fails.
-- It updates `package.json` and `package-lock.json` to the release version.
-- It commits `chore(release): <version>`. The workflow skips commits with that
-  prefix, so the release commit doesn't trigger another release.
+- With a `package.json`, it updates it (and the lockfile) to the release
+  version and commits `chore(release): <version>`. The workflow skips commits
+  with that prefix, so the release commit doesn't trigger another release.
+  Without one, the release is the tag alone.
 - It creates tag `vX.Y.Z` and a GitHub Release; the repo then ships that tag.
 - It force-points `dev` at the release commit. If a later `git pull` on `dev`
   conflicts, run `git reset --hard origin/dev` and branch from there.

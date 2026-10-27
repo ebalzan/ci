@@ -1,6 +1,6 @@
 # Auto Work Items Workflow Guide
 
-This document explains the automated branch workflow every TraceBIM-CE repo runs through tracebim-ci.
+This document explains the automated branch workflow every repo using ebalzan/ci runs.
 
 ## What It Does
 
@@ -11,7 +11,7 @@ When you push to any branch other than `main` or `dev`, the workflow automatical
 3. Links the PR to the issue (`Closes #<issue-number>`).
 4. Applies the exact label set to both issue and PR (removes stale extras).
 5. Applies milestone (if configured).
-6. Adds both issue and PR to GitHub Project (v2).
+6. Adds both issue and PR to GitHub Project (v2) (if `AUTO_PROJECT_NUMBER` is set).
 7. Assigns issue and PR to the latest commit author (if resolvable to a GitHub user).
 8. Updates project fields: `Start date`, `Target date`, `Priority`, `Estimate`, and `Size`.
 
@@ -51,9 +51,9 @@ Why both exist:
 
 ## Trigger Rules
 
-Workflow runs on:
+The caller (`auto-pr.yml`) runs it on:
 
-- `push` to any branch except `main`
+- `push` to any branch except `main` and `dev`
 - tags are ignored
 
 ```yaml
@@ -61,9 +61,13 @@ on:
   push:
     branches-ignore:
       - main
+      - dev
     tags-ignore:
       - '**'
 ```
+
+The reusable workflow also skips `chore/renovate-*` branches, whose PR
+Renovate owns.
 
 ## Concurrency and Idempotency
 
@@ -144,7 +148,8 @@ Milestone resolution order:
 3. none only when both variables are unset
 
 When resolved, milestone is set on both issue and PR.
-Invalid milestone configuration fails the workflow.
+A milestone that cannot be found (or is closed) produces a warning, not a
+failure.
 
 Setup guidance:
 
@@ -157,7 +162,8 @@ Setup guidance:
 Project selection:
 
 - owner: `AUTO_PROJECT_OWNER` (defaults to repo owner)
-- project number: `AUTO_PROJECT_NUMBER` (required for project sync)
+- project number: `AUTO_PROJECT_NUMBER` — unset means no board: the issue and
+  PR are still created, and the board step is skipped
 
 Field lookup is by name (case-insensitive):
 
@@ -198,8 +204,10 @@ Estimate value:
 
 `AUTO_STRICT_METADATA` controls failure behavior for project metadata sync.
 
-- `true` (default): missing project/fields/options causes workflow failure.
-- `false`: missing project/fields/options only emits warnings.
+- `true` (default): with a board configured, a missing project, field or
+  option fails the workflow.
+- `false`: the same problems only emit warnings.
+- Without `AUTO_PROJECT_NUMBER` neither applies: the board is skipped.
 
 This is useful when metadata is mandatory for your process.
 
@@ -207,11 +215,12 @@ This is useful when metadata is mandatory for your process.
 
 `auto-work-items.yml` passes the caller repo's variables whole
 (`REPO_VARS_JSON: ${{ toJSON(vars) }}`) — the repo's `.github/actions.env`,
-pushed by `bin/gh-bootstrap.sh` — and the action takes their `AUTO_*` keys. A
+pushed by `ebalzan-ci bootstrap` — and the action takes their `AUTO_*` keys. A
 knob the repo leaves unset is filled from `config/actions.env` at the action's
 ref (`src/sharedVars.ts`), else the code default applies. So a knob is set in
 the repo's file (then the bootstrap) or in `config/actions.env` (then a release
-that moves v1) — never in the workflow:
+that moves the major tag) — never in the workflow. Defaults and meanings:
+[CONFIGURATION.md](CONFIGURATION.md#actions-variables).
 
 - `AUTO_BASE_BRANCH` (from the `base-branch` input, default `dev`)
 - `AUTO_ISSUE_LABELS`
@@ -234,7 +243,7 @@ that moves v1) — never in the workflow:
 
 Notes:
 
-- For strict project metadata sync (`AUTO_STRICT_METADATA=true`), `AUTO_PROJECT_NUMBER` is required.
+- Without `AUTO_PROJECT_NUMBER` the board is skipped, whatever `AUTO_STRICT_METADATA` says.
 - `GH_PROJECT_TOKEN` is recommended when `github.token` cannot write Project v2 metadata.
 
 ## Permissions Used
@@ -257,7 +266,7 @@ Token source used by workflow:
 Compile TypeScript workflow scripts:
 
 ```bash
-npm run build   # in tracebim-ci
+npm run build   # in a checkout of ebalzan/ci
 ```
 
 Important:
@@ -265,8 +274,8 @@ Important:
 - Commit both `src/` and `dist/` changes. CI (`npm run check`) fails when
   `dist/` does not match `src/`.
 - Callers run `dist/` straight from the action download — nothing builds it on
-  the runner. A change reaches the repos only once the `v1` tag moves
-  (README → Releasing).
+  the runner. A change reaches the repos only once the major tag moves
+  ([CONTRIBUTING → Releasing](../CONTRIBUTING.md#releasing-a-change)).
 
 ## Troubleshooting
 
@@ -278,6 +287,7 @@ why the workflows pass `toJSON(vars)` instead of naming each variable.
 
 ### Common runtime failures
 
+- Unsupported branch prefix (`feature/`, `hotfix/`, `refactor/`, …): rename the branch
 - Project not found (`AUTO_PROJECT_OWNER` / `AUTO_PROJECT_NUMBER` mismatch)
 - Missing required fields in Project v2 (`Start date`, `Target date`, `Priority`, `Estimate`, `Size`)
 - Priority option text does not exist in the project field
