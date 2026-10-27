@@ -46,6 +46,9 @@ on:
 jobs:
   create-and-sync-work-items:
     name: Create and sync work items
+    # Renovate opens and rewrites its own PR on these branches (renovate/tooling.json
+    # → branchPrefix); syncing them here would overwrite its title and body.
+    if: ${{ !startsWith(github.ref_name, 'chore/renovate-') }}
     runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
