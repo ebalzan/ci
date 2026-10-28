@@ -15,7 +15,7 @@ test('version matches package.json', () => {
 test('help lists every command; no command is an error', () => {
   const help = runCli(['help'])
   assert.equal(help.status, 0)
-  for (const command of ['onboard', 'bootstrap', 'reset', 'commit-msg', 'sync-managed', 'path']) {
+  for (const command of ['onboard', 'bootstrap', 'reset', 'commit-msg', 'path']) {
     assert.match(help.stdout, new RegExp(`\\b${command}\\b`))
   }
   assert.equal(runCli([]).status, 1)
@@ -68,7 +68,6 @@ test('script commands forward --help to the bash tool', () => {
     ['bootstrap', /gh-bootstrap\.sh — apply the shared rules/],
     ['reset', /gh-reset\.sh — delete GitHub Actions variables/],
     ['onboard', /onboard\.sh — bring a repo under the shared rules/],
-    ['sync-managed', /DEPRECATED/],
   ]) {
     const result = runCli([command, '--help'])
     assert.equal(result.status, 0, command)

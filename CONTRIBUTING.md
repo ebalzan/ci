@@ -45,7 +45,6 @@ bin/
   gh-bootstrap.sh           variables, secrets, settings, rulesets → GitHub
   gh-reset.sh               delete Actions config on a repo
   onboard.sh                templates + bootstrap for a new repo
-  sync-managed.sh           deprecated: refresh local validator copies
   _lib.sh  _json.mjs        shared helpers (not commands)
 config/                     the shared layer: actions.env, repo-settings.json, rulesets/,
                             repos.env, secrets.env.example (secrets.env is gitignored)

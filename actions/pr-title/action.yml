@@ -2,7 +2,7 @@
 # must be a Conventional Commit subject whose type matches the branch prefix.
 #
 # Also fails when the caller keeps a LOCAL COPY of a managed/ file and it
-# differs from this version's (bin/sync-managed.sh) — the husky commit-msg hook
+# differs from this version's — the husky commit-msg hook
 # runs that copy, so drift would let a commit pass locally that CI rejects.
 # A repo that keeps no copy (its hook runs `ebalzan-ci commit-msg` from the npm
 # package) is fine; local copies are deprecated.
@@ -43,7 +43,7 @@ runs:
         while IFS= read -r rel; do
           [ -f "$GITHUB_WORKSPACE/$rel" ] || continue
           if ! cmp -s "$CI_ROOT/managed/$rel" "$GITHUB_WORKSPACE/$rel"; then
-            echo "::error file=$rel::$rel differs from ebalzan/ci's managed copy. Delete the copy and have the husky hook run 'npx --no-install ebalzan-ci commit-msg \"\$1\"' (recommended), or refresh it with 'npx ebalzan-ci sync-managed --install' and commit the result."
+            echo "::error file=$rel::$rel differs from ebalzan/ci's managed copy. Delete the copy and have the husky hook run 'npx --no-install ebalzan-ci commit-msg \"\$1\"'."
             drift=1
           fi
         done < <(cd "$CI_ROOT/managed" && find . -type f | sed 's#^\./##' | sort)
