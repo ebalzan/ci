@@ -191,14 +191,13 @@ reported as `title / Validate PR Title`, the name the rulesets require.
 npx @ebalzan/ci <command> [options]      # or `ebalzan-ci` once installed
 ```
 
-| Command        | Does                                                                                                  |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| `onboard`      | Adds the templates on a branch, creates `dev`, tags the repo, bootstraps it, pushes.                  |
-| `bootstrap`    | Syncs variables, secrets, settings and rulesets onto one repo (`-C dir`, `-R owner/repo`) or `--all`. |
-| `reset`        | Deletes Actions variables/secrets on a repo after a typed confirmation.                               |
-| `commit-msg`   | Validates a commit message; the husky hook calls it.                                                  |
-| `path`         | Prints the package directory.                                                                         |
-| `sync-managed` | Deprecated: refreshes old local copies of the validator.                                              |
+| Command      | Does                                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| `onboard`    | Adds the templates on a branch, creates `dev`, tags the repo, bootstraps it, pushes.                  |
+| `bootstrap`  | Syncs variables, secrets, settings and rulesets onto one repo (`-C dir`, `-R owner/repo`) or `--all`. |
+| `reset`      | Deletes Actions variables/secrets on a repo after a typed confirmation.                               |
+| `commit-msg` | Validates a commit message; the husky hook calls it.                                                  |
+| `path`       | Prints the package directory.                                                                         |
 
 Every command has `--help`, and `bootstrap`, `reset` and `onboard` have
 `--dry-run`. Full reference: [docs/CLI.md](docs/CLI.md).

@@ -2,8 +2,7 @@
 #
 # MANAGED BY ebalzan/ci (managed/scripts/release/validate-conventional-subject.sh).
 # Run it through the CLI (`ebalzan-ci commit-msg`) rather than copying it. If a
-# repo still keeps a copy, do not edit it: change it in ebalzan/ci, then run
-# `ebalzan-ci sync-managed --all`. PR Checks fails while a repo's copy differs.
+# repo still keeps a copy, delete it: PR Checks fails while a repo's copy differs.
 #
 # The one Conventional Commits rule, used by the husky commit-msg hook (locally,
 # via `ebalzan-ci commit-msg`) and by the shared PR-title check (in CI). The
