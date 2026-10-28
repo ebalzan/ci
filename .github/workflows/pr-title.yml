@@ -6,7 +6,7 @@
 # type the branch prefix implies (feat/ → minor, fix/ → patch, …).
 #
 # It also fails when the repo keeps a (deprecated) local copy of a managed/
-# file that has drifted from this version (bin/sync-managed.sh).
+# file that has drifted from this version.
 #
 # The repo's own build/test jobs stay in its pr-checks.yml next to the call;
 # they run in parallel with this one. Call it from a job named `title` so the

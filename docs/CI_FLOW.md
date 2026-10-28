@@ -91,7 +91,8 @@ that holds only the trigger, the permissions and the `uses:` line.
      - **Promotion** (`dev` → `main`): only requires a valid conventional title;
        the bump is computed later from the promoted commits.
   3. Managed-file drift: if the repo still keeps a (deprecated) local copy of a
-     `managed/` file, it must equal this version's ([CLI → sync-managed](CLI.md#sync-managed)).
+     `managed/` file, it must equal this version's; delete it and use the hook from the package
+     ([CLI](CLI.md#commit-msg)).
 - **Repo jobs** (validate, build, image build, delivery preview, …) run in
   parallel beside it. A bad title still fails the run.
 - The check is reported as **`<caller job id> / Validate PR Title`**. Name the

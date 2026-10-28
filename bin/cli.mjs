@@ -20,7 +20,6 @@ const SCRIPTS = {
   bootstrap: 'gh-bootstrap.sh',
   reset: 'gh-reset.sh',
   onboard: 'onboard.sh',
-  'sync-managed': 'sync-managed.sh',
 }
 
 // Subjects git writes itself; they are not Conventional Commits and need not be.
@@ -33,7 +32,6 @@ Commands:
   bootstrap      Sync variables, secrets, settings and rulesets onto a repo (or --all)
   reset          Delete Actions variables/secrets on a repo (typed confirmation)
   commit-msg     Validate a commit message (the husky commit-msg hook calls this)
-  sync-managed   Refresh local copies of managed files (deprecated)
   path           Print the package directory (to source bin/_lib.sh, read config/)
   version        Print the package version
   help           Show this help

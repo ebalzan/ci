@@ -54,7 +54,6 @@
     "test": "node --test 'test/*.test.mjs'",
     "gh:bootstrap": "bash bin/gh-bootstrap.sh",
     "gh:reset": "bash bin/gh-reset.sh",
-    "sync-managed": "bash bin/sync-managed.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

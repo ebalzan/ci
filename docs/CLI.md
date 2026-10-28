@@ -14,15 +14,14 @@ scripts and need [`gh`](https://cli.github.com) logged in as an **admin** of
 the target repo. Each one prints a plan and asks before changing anything, and
 each has `--dry-run`.
 
-| Command                         | Summary                                                   |
-| ------------------------------- | --------------------------------------------------------- |
-| [`onboard`](#onboard)           | Bring a repo under the shared rules in one step           |
-| [`bootstrap`](#bootstrap)       | Sync variables, secrets, settings and rulesets onto repos |
-| [`reset`](#reset)               | Delete Actions variables/secrets on a repo                |
-| [`commit-msg`](#commit-msg)     | Validate a commit message (husky hook)                    |
-| [`path`](#path)                 | Print the package directory                               |
-| [`sync-managed`](#sync-managed) | Deprecated: refresh local copies of managed files         |
-| `version`, `help`               | Print the version / the command list                      |
+| Command                     | Summary                                                   |
+| --------------------------- | --------------------------------------------------------- |
+| [`onboard`](#onboard)       | Bring a repo under the shared rules in one step           |
+| [`bootstrap`](#bootstrap)   | Sync variables, secrets, settings and rulesets onto repos |
+| [`reset`](#reset)           | Delete Actions variables/secrets on a repo                |
+| [`commit-msg`](#commit-msg) | Validate a commit message (husky hook)                    |
+| [`path`](#path)             | Print the package directory                               |
+| `version`, `help`           | Print the version / the command list                      |
 
 ---
 
@@ -202,24 +201,15 @@ source "$(npx --no-install ebalzan-ci path)/bin/_lib.sh"   # info/ok/warn/die, e
 
 ---
 
-## sync-managed
-
-**Deprecated.** Before 2.0, repos could keep a verbatim copy of the validator
-at `scripts/release/validate-conventional-subject.sh`; the PR-title check fails
-when such a copy drifts. This refreshes those copies (`--install` creates them,
-`--check` only reports). Prefer deleting the copy and using the hook above.
-
----
-
 ## Environment variables
 
-| Variable                    | Used by                                 | Meaning                                                                                                        |
-| --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `CI_SECRETS_DIR`            | `bootstrap`                             | Directory with the shared `secrets.env` / `secrets.<env>.env`, and `repos/<owner>/<repo>/` for each repo's own |
-| `CI_REPOS_ROOT`             | `bootstrap --all`, `sync-managed --all` | Where local checkouts live: `<root>/<repo name>` (default: next to this package's checkout)                    |
-| `CI_DIR`                    | the husky hook                          | A checkout of this repo, used when the package is not installed (default `../ci`)                              |
-| `XDG_CONFIG_HOME`           | `bootstrap`                             | Base of the default shared secrets dir                                                                         |
-| `NO_COLOR` / non-TTY output | all                                     | Plain output without colours                                                                                   |
+| Variable                    | Used by           | Meaning                                                                                                        |
+| --------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| `CI_SECRETS_DIR`            | `bootstrap`       | Directory with the shared `secrets.env` / `secrets.<env>.env`, and `repos/<owner>/<repo>/` for each repo's own |
+| `CI_REPOS_ROOT`             | `bootstrap --all` | Where local checkouts live: `<root>/<repo name>` (default: next to this package's checkout)                    |
+| `CI_DIR`                    | the husky hook    | A checkout of this repo, used when the package is not installed (default `../ci`)                              |
+| `XDG_CONFIG_HOME`           | `bootstrap`       | Base of the default shared secrets dir                                                                         |
+| `NO_COLOR` / non-TTY output | all               | Plain output without colours                                                                                   |
 
 The pre-2.0 name `TRACEBIM_REPOS_ROOT` is still honoured.
 
