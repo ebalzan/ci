@@ -482,8 +482,10 @@ async function syncProjectMetadata({ github, core, config, issue, pr, }) {
     const failOrWarn = getMetadataFailureHandler({ config, core });
     const projectNumber = Number(config.env.AUTO_PROJECT_NUMBER || 0);
     const projectOwner = (config.env.AUTO_PROJECT_OWNER || config.owner).trim();
+    // No board configured is a choice, not an error: strict mode only guards a board
+    // that IS configured (wrong number, missing fields), so repos without one still pass.
     if (!projectNumber) {
-        failOrWarn('AUTO_PROJECT_NUMBER not set; project assignment and field updates cannot run.');
+        core.info('AUTO_PROJECT_NUMBER not set; skipping the project board.');
         return;
     }
     let details;

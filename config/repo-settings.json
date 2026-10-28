@@ -1,0 +1,10 @@
+{
+  "$comment": "Repository settings every managed repo gets (PATCH /repos/{owner}/{repo}). A repo overrides any key in its own .github/repo-settings.json. Keys starting with $ are documentation and are never sent. Reference: docs/REPO_RULES.md.",
+  "allow_squash_merge": true,
+  "allow_merge_commit": false,
+  "allow_rebase_merge": false,
+  "squash_merge_commit_title": "PR_TITLE",
+  "squash_merge_commit_message": "COMMIT_MESSAGES",
+  "delete_branch_on_merge": true,
+  "allow_update_branch": true
+}

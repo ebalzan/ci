@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
@@ -52,7 +52,7 @@ async function githubRequest(path, options = {}) {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'tracebim-ci-release-workflow',
+      'User-Agent': 'ebalzan-ci-release',
       'X-GitHub-Api-Version': '2022-11-28',
       ...(options.headers || {}),
     },
@@ -79,15 +79,23 @@ function getLatestReleaseTag() {
   return tags[0] || null
 }
 
+// A repo without package.json (Go, Python, docs, …) is released tag-only: the
+// version lives in the tags alone, so there is nothing to bump or commit.
+function hasPackageJson() {
+  return existsSync(join(process.cwd(), 'package.json'))
+}
+
 function getCurrentVersion(previousTag) {
   if (previousTag) {
     return previousTag.replace(/^v/, '')
   }
 
-  const packageJson = JSON.parse(
-    readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
-  )
-  return packageJson.version
+  if (!hasPackageJson()) {
+    return '0.0.0'
+  }
+
+  const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
+  return packageJson.version || '0.0.0'
 }
 
 function getHeadCommitMessage() {
@@ -265,6 +273,16 @@ async function main() {
     return
   }
 
+  // A re-run on a commit that is already a release (the tag-only case, where no
+  // release commit follows it) must not cut a second one.
+  const headTags = run('git', ['tag', '--points-at', 'HEAD'])
+    .split('\n')
+    .filter(tag => /^v\d+\.\d+\.\d+$/.test(tag.trim()))
+  if (headTags.length > 0) {
+    log(`HEAD is already released as ${headTags.join(', ')}. Skipping.`)
+    return
+  }
+
   const previousTag = getLatestReleaseTag()
   const currentVersion = getCurrentVersion(previousTag)
   const commitMessages = getCommitMessagesSince(previousTag)
@@ -300,18 +318,26 @@ async function main() {
     ].join(' '),
   )
 
-  run('npm', ['version', nextVersion, '--no-git-tag-version'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  run('git', ['add', 'package.json', 'package-lock.json'])
-  run('git', ['commit', '-m', `chore(release): ${nextVersion}`], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  if (hasPackageJson()) {
+    run('npm', ['version', nextVersion, '--no-git-tag-version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const lockfiles = ['package-lock.json', 'npm-shrinkwrap.json'].filter(file =>
+      existsSync(join(process.cwd(), file)),
+    )
+    run('git', ['add', 'package.json', ...lockfiles])
+    run('git', ['commit', '-m', `chore(release): ${nextVersion}`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } else {
+    log('No package.json: tag-only release (no version commit).')
+  }
   const releaseCommitSha = run('git', ['rev-parse', 'HEAD'])
   run('git', ['tag', '-a', nextTag, '-m', `Release ${nextTag}`], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  run('git', ['push', 'origin', `HEAD:${refName}`, '--follow-tags'], {
+  // The tag is pushed by name, so a tag-only release (no new commit) pushes it too.
+  run('git', ['push', '--atomic', 'origin', `HEAD:${refName}`, `refs/tags/${nextTag}`], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 

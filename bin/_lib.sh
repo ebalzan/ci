@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
-# _lib.sh — shared helpers for the tracebim-ci GitHub-config tools.
+# _lib.sh — shared helpers for the ebalzan/ci GitHub-config tools.
 # This file is *sourced*, not executed. The sourcing script owns `set -euo pipefail`.
 #
-# Also sourced by repo-local admin tools (tracebim-api scripts/provision-host.sh,
-# tracebim-frontend .github/scripts/vercel-env.sh) through
-# ${TRACEBIM_CI_DIR:-<repo>/../tracebim-ci}/bin/_lib.sh, so keep it free of
-# anything specific to one script.
+# Also meant to be sourced by a repo's own admin scripts, so keep it free of
+# anything specific to one script. Find it with the CLI:
+#
+#   source "$(npx --no-install ebalzan-ci path)/bin/_lib.sh"
 #
 # Bash 3.2 compatible (macOS /bin/bash): no associative arrays, no mapfile.
 
 # ---- pretty output -----------------------------------------------------------
-if [[ -t 1 ]]; then
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'
   YELLOW=$'\033[33m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
 else
@@ -93,4 +93,61 @@ confirm_typed() {
   printf '%s%s%s ' "$YELLOW" "$2" "$RESET"
   read -r reply
   [[ "$reply" == "$1" ]]
+}
+
+# ---- repo discovery ----------------------------------------------------------
+# ci_repos_root CI_ROOT — where `--all` looks for local checkouts
+# (<root>/<repo name>). TRACEBIM_REPOS_ROOT is the pre-2.0 name, still honoured.
+ci_repos_root() {
+  printf '%s' "${CI_REPOS_ROOT:-${TRACEBIM_REPOS_ROOT:-$(dirname "$1")}}"
+}
+
+# managed_repos REPOS_FILE CI_ROOT — every OWNER/REPO `--all` acts on, one per
+# line, de-duplicated: the repos of REPOS_OWNER (default: the gh user) tagged
+# with REPOS_TOPIC, plus the explicit REPOS list. A REPOS entry without a slash
+# is a pre-2.0 checkout directory name under ci_repos_root; its slug comes from
+# that checkout's remote.
+managed_repos() {
+  local file="$1" ci_root="$2" topic owner entry root
+  topic="$(unquote "$(env_get "$file" REPOS_TOPIC)")"
+  owner="$(unquote "$(env_get "$file" REPOS_OWNER)")"
+  root="$(ci_repos_root "$ci_root")"
+  {
+    if [[ -n "$topic" ]]; then
+      [[ -n "$owner" ]] || owner="$(gh api user -q .login 2>/dev/null || true)"
+      [[ -n "$owner" ]] || die "REPOS_TOPIC is set but the gh user is unknown. Run gh auth login, or set REPOS_OWNER."
+      gh repo list "$owner" --topic "$topic" --no-archived --limit 1000 \
+        --json nameWithOwner -q '.[].nameWithOwner' \
+        || die "Could not list $owner's repos tagged '$topic'."
+    fi
+    for entry in $(unquote "$(env_get "$file" REPOS)"); do
+      if [[ "$entry" == */* ]]; then
+        printf '%s\n' "$entry"
+      elif [[ -d "$root/$entry" ]]; then
+        detect_repo "$root/$entry"; printf '\n'
+      else
+        warn "REPOS entry '$entry' has no checkout at $root/$entry — use OWNER/REPO."
+      fi
+    done
+  } | awk 'NF && !seen[tolower($0)]++'
+}
+
+# local_checkout SLUG CI_ROOT — the local checkout of SLUG, if there is one:
+# this repo itself, or <ci_repos_root>/<repo name> whose remote is SLUG. Prints
+# nothing otherwise.
+local_checkout() {
+  local slug="$1" ci_root="$2" dir found
+  for dir in "$ci_root" "$(ci_repos_root "$ci_root")/${slug#*/}"; do
+    [[ -d "$dir/.git" || -f "$dir/.git" ]] || continue
+    found="$(detect_repo "$dir")"
+    if [[ "$(printf '%s' "$found" | tr '[:upper:]' '[:lower:]')" == "$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]')" ]]; then
+      (cd "$dir" && pwd); return 0
+    fi
+  done
+  return 0
+}
+
+# print_help SCRIPT — the script's leading comment block, minus the shebang.
+print_help() {
+  awk 'NR>1 && /^#/{ sub(/^# ?/, ""); print; next } NR>1{ exit }' "$1"
 }

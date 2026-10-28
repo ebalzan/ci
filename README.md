@@ -1,51 +1,138 @@
-# tracebim-ci
+# ebalzan/ci
 
-Shared GitHub Actions for the TraceBIM-CE repos (`tracebim-api`,
-`tracebim-frontend`, `tracebim-frontend-mobile`): the workflows, scripts and
-Actions config that are **the same in every repo**. Anything that differs per
-repo — its build checks, its deploy, its board number, its deploy secrets —
-stays in that repo, and every repo can override or add any variable or secret.
+[![npm](https://img.shields.io/npm/v/@ebalzan/ci)](https://www.npmjs.com/package/@ebalzan/ci)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-| Doc                                                                  | Covers                                                        |
-| -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [docs/CI_FLOW.md](docs/CI_FLOW.md)                                   | branch → `dev` → `main` → release, stage by stage, bump rules |
-| [docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md)         | where each value lives, shared vs repo layers, the bootstrap  |
-| [docs/AUTO_WORK_ITEMS_WORKFLOW.md](docs/AUTO_WORK_ITEMS_WORKFLOW.md) | the issue/PR/project-board automation                         |
-| [docs/COMMIT_GUIDE.md](docs/COMMIT_GUIDE.md)                         | commit conventions, PR titles, versioning                     |
+**One set of CI/CD rules for every GitHub repo you own.** Point a repo at this
+one and it gets the same branch model, the same commit convention, the same
+automatic semver releases, the same repository settings and the same branch
+protection as every other repo — and when a rule changes here, it changes
+everywhere.
 
-## Layout
+It has three parts:
+
+| Part                                         | What it is                                                                                                                                                                                     |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reusable workflows** (`.github/workflows`) | Called by four thin files in each repo: auto issue + PR per branch, PR-title check, the evergreen `dev → main` PR, and the release (bump, tag, GitHub Release).                                |
+| **CLI** (`npx @ebalzan/ci`)                  | `onboard` a repo in one command; `bootstrap` its Actions variables, secrets, settings and rulesets from shared + per-repo files (one repo or `--all`); validate commit messages in a git hook. |
+| **Shared config** (`config/`)                | The house rules: shared Actions variables, repository settings, branch rulesets — each overridable per repo.                                                                                   |
 
 ```text
-.github/workflows/
-  auto-work-items.yml       reusable  issue + PR + board card per feature branch
-  pr-title.yml              reusable  Conventional Commit title + branch release type
-  promote-dev-to-main.yml   reusable  the evergreen dev → main PR
-  release.yml               reusable  semver bump, tag, GitHub Release, sync dev; outputs tag/sha
-  self-*.yml                this repo's own flow: thin callers of the four above (README → Releasing)
-actions/                    composite actions the reusable workflows run
-  auto-work-items/          TypeScript src/ + committed dist/
-  pr-title/  promote/  release/
-scripts/release/            release-main, promote-dev-to-main, release-utils, verify-pr-release-type
-managed/                    files repos' local tooling runs (the commit-msg validator)
-renovate/tooling.json       shared Renovate preset: dev tooling on the same versions everywhere
-config/
-  actions.env               shared variables, read at run time (committed)
-  secrets.env               shared repository secrets   (gitignored; .example committed)
-  repos.env                 the repos --all acts on, and this repo's slug
-bin/
-  gh-bootstrap.sh           merge shared + repo config → push to GitHub
-  gh-reset.sh               delete Actions config on a repo
-  sync-managed.sh           refresh repos' optional local copies of managed/
+  feat/login ── push ──▶ issue + PR into dev          (auto-work-items)
+                          │  PR title checked          (pr-title)
+                          ▼  squash-merge
+                         dev ──▶ one dev → main PR     (promote-dev-to-main)
+                          │       "feat: promote dev to main (v1.4.0)"
+                          ▼  squash-merge = release approval
+                         main ──▶ v1.4.0 tag + GitHub Release, dev synced   (release)
+                                   └─▶ your own deploy job, chained on the tag
 ```
 
-## How a repo uses it
+---
 
-Each repo keeps **thin callers**: the trigger, the permissions, and `uses:`.
-Triggers cannot live in a reusable workflow, and a reusable workflow can only
-narrow the permissions its caller grants — so those two stay in the repo.
+## Contents
+
+- [Quick start](#quick-start)
+- [What every repo gets](#what-every-repo-gets)
+- [Using the workflows by hand](#using-the-workflows-by-hand)
+- [Commands](#commands)
+- [Configuration in one minute](#configuration-in-one-minute)
+- [Versions and updates](#versions-and-updates)
+- [Requirements and limits](#requirements-and-limits)
+- [Documentation](#documentation)
+- [Contributing](#contributing) · [License](#license)
+
+---
+
+## Quick start
+
+**Prerequisites:** [GitHub CLI](https://cli.github.com) logged in as an admin of
+the repo (`gh auth login`, plus `gh auth refresh -s project` if you use project
+boards), Node.js ≥ 20, git, and bash (Linux, macOS, WSL or Git Bash).
+
+**1. Put the shared secrets in one place** (once per machine). Every repo gets
+these as repository secrets:
+
+```bash
+mkdir -p ~/.config/ebalzan-ci
+cat > ~/.config/ebalzan-ci/secrets.env <<'EOF'
+# Writes the issue/PR descriptions. Optional: without it the body is a stub.
+ANTHROPIC_API_KEY=sk-ant-...
+# Classic PAT, scopes `repo` + `project`. Optional: lets the bots' PRs trigger
+# PR Checks and write to Projects (v2) boards. Why classic: docs/GITHUB_ACTIONS_SETUP.md
+GH_PROJECT_TOKEN=ghp_...
+EOF
+```
+
+A repo's **own** secrets (deploy credentials, …) go in the same folder, under
+`repos/<owner>/<repo>/` — e.g. `repos/me/my-api/secrets.production.env` for its
+`production` environment. Then `bootstrap --all` works with no checkouts
+([ARCHITECTURE §7](docs/ARCHITECTURE.md#7-where-you-run-commands)).
+
+**2. Onboard a repo**, from its checkout:
+
+```bash
+cd my-repo
+npx @ebalzan/ci onboard --dry-run   # see exactly what it will do
+npx @ebalzan/ci onboard             # do it
+```
+
+That creates a `ci/onboard-ebalzan-ci` branch with the four workflow callers, a
+starter `.github/actions.env`, `renovate.json`, the `.gitignore` lines for
+secrets files and, for Node repos, the husky `commit-msg` hook and the
+[`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config) Prettier and
+ESLint wiring; creates `dev` if missing; tags the repo `ebalzan-ci`; applies
+the variables, secrets, settings and rulesets; and pushes. The new
+`auto-pr.yml` opens the PR into `dev` on that very push.
+
+**3. Merge it** (squash), then merge the `dev → main` PR that appears: that is
+the repo's first release.
+
+From then on, the flow is just:
+
+```bash
+git switch dev && git pull
+git switch -c feat/search-filters
+git commit -m "feat(search): add filters"      # the hook checks the format
+git push -u origin feat/search-filters         # issue + PR into dev appear
+```
+
+Full walkthrough and the manual alternative: [docs/ONBOARDING.md](docs/ONBOARDING.md).
+
+---
+
+## What every repo gets
+
+| Rule                 | What it means                                                                                                                                                                        | Details                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Branch model         | Work branches `<type>/<desc>` → `dev` (integration) → `main` (releases). Only the automated promotion PR merges into `main`.                                                         | [CI_FLOW](docs/CI_FLOW.md)                                                               |
+| Commit convention    | Conventional Commits with the types `feat fix docs style refact perf test build ci chore revert`. Checked locally by the hook and on every PR title.                                 | [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                                                     |
+| Branch ↔ title match | A `feat/` branch needs a `feat:` title (minor), any other type a patch-level title, unless it is marked breaking (`!`).                                                              | [CI_FLOW §3](docs/CI_FLOW.md#stage-2--pr-checks)                                         |
+| Work items           | Every pushed work branch gets a tracking issue and a PR into `dev`, labelled, assigned, optionally on a milestone and a Projects (v2) board with priority/size/estimate/dates.       | [AUTO_WORK_ITEMS](docs/AUTO_WORK_ITEMS_WORKFLOW.md)                                      |
+| Releases             | Every push to `main` is a release: semver bump from the commits since the last tag, `vX.Y.Z` tag, GitHub Release, `package.json` bumped if there is one (tag-only otherwise).        | [CI_FLOW §4](docs/CI_FLOW.md#4-version-bump-rules-commit-scan)                           |
+| Repo settings        | Squash-merge only, squash commit titled from the PR title, branches deleted after merge.                                                                                             | [REPO_RULES](docs/REPO_RULES.md)                                                         |
+| Branch rulesets      | `main` cannot be deleted or force-pushed; `dev` cannot be deleted; an opt-in rule requires PRs + the title check.                                                                    | [REPO_RULES](docs/REPO_RULES.md)                                                         |
+| Code style (Node)    | Prettier, ESLint and TypeScript rules from [`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config), extended — not copied — by each repo.                                 | [ARCHITECTURE §10](docs/ARCHITECTURE.md#10-the-two-packages-ebalzanci-and-ebalzanconfig) |
+| Dev tooling versions | A Renovate preset keeps Prettier, ESLint, husky, lint-staged, TypeScript and both `@ebalzan` packages on the same versions everywhere — one grouped PR a week, nothing else touched. | [renovate/tooling.json](renovate/tooling.json)                                           |
+
+Every rule can be overridden per repo, in that repo — see
+[Configuration](#configuration-in-one-minute).
+
+**What stays in each repo:** the four small caller files (two identical
+everywhere, two with the repo's own jobs added), its build/test jobs, its
+deploy, and its own variables and secrets. Which file is which, what runs
+where, and how to structure a deploy: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Using the workflows by hand
+
+`onboard` writes these for you ([templates/](templates/)), but nothing more is
+needed than four small files. Each holds only what a reusable workflow cannot:
+the trigger, the permissions and the secrets.
 
 ```yaml
-# <repo>/.github/workflows/auto-pr.yml
+# .github/workflows/auto-pr.yml
 name: Auto Create Work Items
 on:
   push:
@@ -58,24 +145,24 @@ permissions:
   repository-projects: write
 jobs:
   work-items:
-    uses: ebalzan/tracebim-ci/.github/workflows/auto-work-items.yml@v1
-    with:
-      runs-on: self-hosted
+    uses: ebalzan/ci/.github/workflows/auto-work-items.yml@v2
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GH_PROJECT_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
 ```
 
-Secrets are passed by name, not with `secrets: inherit` (only guaranteed
-within one organization or enterprise). Variables need no passing: inside a
-reusable workflow, `vars` are the **caller repo's** variables.
-
-Repo-specific work chains onto the shared jobs — e.g. a deploy after a release:
-
 ```yaml
+# .github/workflows/release.yml — with a deploy chained on the new tag
+name: Release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  pull-requests: read
 jobs:
   release:
-    uses: ebalzan/tracebim-ci/.github/workflows/release.yml@v1
+    uses: ebalzan/ci/.github/workflows/release.yml@v2
   deploy:
     needs: release
     if: ${{ needs.release.outputs.tag != '' }}
@@ -84,138 +171,133 @@ jobs:
       image_tag: ${{ needs.release.outputs.tag }}
 ```
 
-Every input (`runs-on`, `base-branch`, `sync-dev`) and required permission is
-documented in each workflow's header.
+| Reusable workflow         | Inputs (all optional)                                     | Secrets                                 | Caller must grant                                                                       |
+| ------------------------- | --------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------- |
+| `auto-work-items.yml`     | `runs-on` (`ubuntu-latest`), `base-branch` (`dev`)        | `ANTHROPIC_API_KEY`, `GH_PROJECT_TOKEN` | `contents: read`, `issues: write`, `pull-requests: write`, `repository-projects: write` |
+| `pr-title.yml`            | `runs-on`                                                 | —                                       | `contents: read`                                                                        |
+| `promote-dev-to-main.yml` | `runs-on`                                                 | `GH_PROJECT_TOKEN`                      | `contents: read`, `issues: write`, `pull-requests: write`                               |
+| `release.yml`             | `runs-on`, `sync-dev` (`true`) · **outputs** `tag`, `sha` | —                                       | `contents: write`, `pull-requests: read`                                                |
 
-## Config: shared vs repo
+Secrets are passed by name: `secrets: inherit` is only guaranteed within one
+organization. Variables need no passing — inside a reusable workflow, `vars` are
+the **caller's**. Call `pr-title.yml` from a job named `title` so the check is
+reported as `title / Validate PR Title`, the name the rulesets require.
+
+---
+
+## Commands
 
 ```text
-tracebim-ci/config/actions.env    +  <repo>/.github/actions.env       → variables (shared: read at run time)
-tracebim-ci/config/secrets.env    +  <repo>/.github/secrets.env       → repository secrets
-tracebim-ci/config/secrets.X.env  +  <repo>/.github/secrets.X.env     → environment X secrets
-         shared (lower)                    repo (wins)
+npx @ebalzan/ci <command> [options]      # or `ebalzan-ci` once installed
 ```
 
-```bash
-bin/gh-bootstrap.sh --all --dry-run   # shows each key as shared / repo / overrides / redundant
-bin/gh-bootstrap.sh --all --prune     # push, and delete what no file defines any more
+| Command        | Does                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `onboard`      | Adds the templates on a branch, creates `dev`, tags the repo, bootstraps it, pushes.                  |
+| `bootstrap`    | Syncs variables, secrets, settings and rulesets onto one repo (`-C dir`, `-R owner/repo`) or `--all`. |
+| `reset`        | Deletes Actions variables/secrets on a repo after a typed confirmation.                               |
+| `commit-msg`   | Validates a commit message; the husky hook calls it.                                                  |
+| `path`         | Prints the package directory.                                                                         |
+| `sync-managed` | Deprecated: refreshes old local copies of the validator.                                              |
+
+Every command has `--help`, and `bootstrap`, `reset` and `onboard` have
+`--dry-run`. Full reference: [docs/CLI.md](docs/CLI.md).
+
+---
+
+## Configuration in one minute
+
+Everything is a file, merged in two layers — **the repo's value always wins**:
+
+```text
+                     shared (this package)              repo
+Actions variables    config/actions.env              +  .github/actions.env
+repository secrets   ~/.config/ebalzan-ci/secrets.env +  ~/.config/ebalzan-ci/repos/<owner>/<repo>/secrets.env
+environment secrets  …/secrets.<env>.env              +  …/repos/<owner>/<repo>/secrets.<env>.env
+                                                         (or the repo's gitignored .github/secrets*.env)
+repo settings        config/repo-settings.json        +  .github/repo-settings.json   (deep merge)
+branch rulesets      config/rulesets/<name>.json      +  .github/rulesets/<name>.json (deep merge)
 ```
 
-Shared **variables** are never copied onto repos: the actions read
-`config/actions.env` from the tracebim-ci they run from (`@v1`) and fill what
-the repo leaves unset, so a shared variable changes when v1 moves. Shared
-**secrets** cannot be committed, so the bootstrap still merges them into every
-repo — re-run it after changing one. Full rules:
-[docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md).
+`ebalzan-ci bootstrap` shows the merged plan (`--dry-run`), labelling each key
+`shared`, `repo`, `repo (overrides shared)` or `repo (same as shared:
+redundant)`, and applies it. Shared **variables** are never copied onto repos:
+the actions read `config/actions.env` at run time from the version the caller
+pins, so changing one is a release, not a sync.
 
-## Managed files
+`--all` acts on every repo tagged with the `ebalzan-ci` topic (which `onboard`
+adds) plus any listed in `config/repos.env`.
 
-Each repo's husky `commit-msg` hook runs
-`managed/scripts/release/validate-conventional-subject.sh`. Preferred: the hook
-runs it straight from the sibling checkout
-(`${TRACEBIM_CI_DIR:-../tracebim-ci}`) and warns, without blocking, when that
-checkout is absent — the shared PR-title check still enforces the rule on every
-PR, and squash merges keep only the PR title. tracebim-api works this way and
-keeps no copy.
+- Every key, its default and who reads it: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- Variables vs secrets, repository vs environment scope: [docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md)
+- Settings and rulesets: [docs/REPO_RULES.md](docs/REPO_RULES.md)
 
-A repo that wants the hook to work without the sibling checkout can keep a
-verbatim copy at the same path (`bin/sync-managed.sh -C <repo> --install`);
-this repo is private, so it cannot be npm-installed instead.
-`bin/sync-managed.sh --all` refreshes existing copies, and the PR-title check
-fails while one differs. Edit the file here, never in a repo.
+---
 
-## Dev tooling versions (Renovate)
+## Versions and updates
 
-`renovate/tooling.json` keeps Prettier, ESLint (with `@eslint/js`,
-`typescript-eslint` and the Prettier plugin/config), lint-staged, husky and
-TypeScript on the same versions in every repo. Each repo's `renovate.json`
-extends it:
+This repo releases itself with its own pipeline, and the version means the
+same thing in both places:
 
-```json
-{ "extends": ["github>ebalzan/tracebim-ci//renovate/tooling#v1"] }
-```
+- **Callers pin a major tag**: `uses: ebalzan/ci/…@v2`. Every release moves
+  `v2` to it, so fixes and new features reach every repo with no change on
+  their side. Pinning `@v2.3.1` or a SHA freezes only the workflow file — the
+  actions inside it still follow `v2` ([why](docs/ARCHITECTURE.md#9-versions-what-a-pin-freezes)).
+- **The npm package** `@ebalzan/ci` has the same version as the tag.
+- **Breaking changes** (a removed input, a new required permission or secret, a
+  renamed variable) only ever ship as a new major (`v3`). `v2` stays where it is,
+  and each repo moves when you are ready.
 
-- **What it opens:** every Monday, one `chore(deps): update dev tooling` PR
-  into `dev` per repo (majors get a separate PR), from a `chore/renovate-*`
-  branch so `pr-title` accepts it. Merge it like any other PR. Every other
-  dependency is left alone.
-- **Exceptions** go in the repo's own `renovate.json` as `allowedVersions`
-  rules (e.g. `eslint` `<10` while `eslint-plugin-react` lacks ESLint 10
-  support). A cap every repo needs (the `typescript` cap from
-  `typescript-eslint`) lives in the preset.
-- **Work items skip Renovate branches** (`auto-work-items.yml`), since Renovate
-  owns those PRs' titles and bodies.
-- **Setup:** install the Renovate GitHub App on this repo (it reads the preset
-  from here) and every repo that extends it. Renovate reads each repo's
-  `renovate.json` from its default branch, so it starts working once the file
-  is promoted to `main`; a preset change reaches the repos when `v1` moves.
+What changed in each release: [GitHub Releases](https://github.com/ebalzan/ci/releases).
+Upgrading from the private `tracebim-ci` v1: [docs/MIGRATION.md](docs/MIGRATION.md).
 
-## One-time setup
+---
 
-1. Create the **private** repo `ebalzan/tracebim-ci` and push this checkout.
-2. **Settings → Actions → General → Access** → _Accessible from repositories
-   owned by the user 'ebalzan'_. Without it, every caller fails with "workflow
-   was not found". Only repos **owned by `ebalzan`** can call a private repo's
-   workflows — a repo in an organization cannot.
-3. Seed `v1` once: `git tag v1.0.0 <sha> && git tag v1 <sha> && git push origin v1.0.0 v1`,
-   where `<sha>` is any pushed commit that has `actions/`. This repo's own
-   workflows run the actions at `@v1` (README → Releasing), so nothing runs
-   until it exists; from then on every release moves it.
-4. `cp config/secrets.env.example config/secrets.env`, fill it in.
-5. `bin/gh-bootstrap.sh --all --dry-run`, then `--all --prune`; and
-   `npm run gh:bootstrap` here, for this repo's own variables and secrets.
-6. Branch protection: a required check named `Validate PR Title` is now
-   reported as `title / Validate PR Title` — update the rule.
+## Requirements and limits
 
-## Releasing a change
+- **GitHub.com** repos. The reusable workflows are public, so any repo — personal
+  or organization — can call them.
+- **The flow is fixed:** `main` + `dev` + typed work branches + squash merges.
+  That is the point (the same rules everywhere), not an accident. `runs-on`,
+  the board, labels, milestone, priorities, sizes and descriptions are
+  configurable; the branch model and commit types are not.
+- **Rulesets** need a public repo or a paid plan (GitHub Pro/Team) for private
+  ones; on the free plan `bootstrap` warns and skips them. Everything else works
+  on the free plan.
+- **Projects (v2) boards owned by a personal account** need a _classic_ PAT
+  (`GH_PROJECT_TOKEN`); fine-grained tokens cannot reach them.
+- **The CLI needs bash** (Linux, macOS, WSL, Git Bash). The `commit-msg` command
+  needs a POSIX `sh`.
+- The work-item descriptions are written by Claude (Anthropic API) when
+  `ANTHROPIC_API_KEY` is set; without it a plain template is used.
 
-tracebim-ci runs the same feature → `dev` → `main` → release flow as the other
-repos ([docs/CI_FLOW.md](docs/CI_FLOW.md)), through the `self-*.yml` callers.
-They call the reusable workflows by local path (`./.github/workflows/…`)
-instead of `ebalzan/tracebim-ci/…@v1`; everything else is the same.
+---
 
-```bash
-git switch dev && git pull && git switch -c fix/your-change
-git commit -m "fix(release): …" && git push -u origin fix/your-change
-# Issue + PR into dev open; PR Checks = title + npm run check. Squash-merge.
-# The dev → main PR opens. Squash-merge it: that is the release.
-```
+## Documentation
 
-Merging into `main` releases `vX.Y.Z` and then **moves `v1`** to it
-(`self-release.yml` → `major-tag`). Callers pin `@v1`, so that is the moment
-the change reaches every repo; merge the promotion PR deliberately.
+| Doc                                                          | Covers                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| [ARCHITECTURE](docs/ARCHITECTURE.md)                         | What is shared vs repo-specific, what runs where, deploys, design decisions    |
+| [ONBOARDING](docs/ONBOARDING.md)                             | Adding a repo with `onboard`, or by hand; what each generated file is for      |
+| [CI_FLOW](docs/CI_FLOW.md)                                   | Branch → `dev` → `main` → release, stage by stage; bump rules; troubleshooting |
+| [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                         | Commit types, PR titles, versioning, for people writing commits                |
+| [AUTO_WORK_ITEMS_WORKFLOW](docs/AUTO_WORK_ITEMS_WORKFLOW.md) | The issue / PR / board automation in detail                                    |
+| [CONFIGURATION](docs/CONFIGURATION.md)                       | Every variable, secret and config file, with defaults                          |
+| [GITHUB_ACTIONS_SETUP](docs/GITHUB_ACTIONS_SETUP.md)         | Where a value belongs (variable/secret, repo/environment) and why              |
+| [REPO_RULES](docs/REPO_RULES.md)                             | Repository settings and branch rulesets                                        |
+| [CLI](docs/CLI.md)                                           | Every command and option                                                       |
+| [MIGRATION](docs/MIGRATION.md)                               | From `ebalzan/tracebim-ci` v1 to `ebalzan/ci` v2                               |
+| [CONTRIBUTING](CONTRIBUTING.md)                              | Working on this repo: layout, tests, releasing, publishing to npm              |
 
-- **What runs which version.** A local `uses: ./…` runs the workflow file at
-  the commit being built, but inside it the actions are still
-  `ebalzan/tracebim-ci/actions/<name>@v1` — the last release. So a change to an
-  action or a release script is checked by `npm run check` on its PR, and runs
-  for real only after its own release. That is deliberate: a broken change
-  cannot break the pipeline that ships its fix.
-- **Breaking change** (a removed input, a new required secret, a new permission
-  the callers must grant): mark it (`feat!:` / `BREAKING CHANGE:`). The release
-  is `v2.0.0` and creates `v2`; `v1` stays on the last 1.x, so no repo changes.
-  `major-tag` then warns that the internal refs still say `@v1`: open a PR
-  switching them to `@v2` (it could not pass its checks before `v2` existed),
-  which releases `v2.0.1` with consistent refs. Move each repo to `@v2` when
-  ready.
-- **Rollback:** `git tag -f v1 v1.3.0 && git push -f origin v1`.
-- **Internal references.** The reusable workflows call this repo's actions as
-  `ebalzan/tracebim-ci/actions/<name>@v1`. A reusable workflow cannot know the
-  ref it was called at, and a private repo cannot be checked out with the
-  caller's token, so the tag is written out. To try an unreleased branch in
-  another repo, push a branch whose internal refs point at itself, and point
-  one repo's caller at that branch.
+---
 
-## Adding a repo
+## Contributing
 
-1. Add its directory name to `REPOS` in `config/repos.env`.
-2. Copy the thin callers from an existing repo; set `runs-on`.
-3. Copy tracebim-api's `.husky/commit-msg`, which runs the validator from
-   `../tracebim-ci` (see Managed files).
-4. Give it `.github/actions.env` with only its own keys (at least
-   `AUTO_PROJECT_NUMBER`) and `npm` scripts for the tools:
-   ```json
-   "gh:bootstrap": "bash ${TRACEBIM_CI_DIR:-../tracebim-ci}/bin/gh-bootstrap.sh --repo-dir .",
-   "gh:reset": "bash ${TRACEBIM_CI_DIR:-../tracebim-ci}/bin/gh-reset.sh --repo-dir ."
-   ```
-5. `bin/gh-bootstrap.sh -C ../<repo> --dry-run`, then for real.
+Issues and PRs are welcome. This repo uses its own rules, so a PR needs a
+typed branch and a Conventional Commit title. Setup, tests and the release
+process: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports:
+[SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © ebalzan

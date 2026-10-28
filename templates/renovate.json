@@ -1,0 +1,4 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>__CI_REPO__//renovate/tooling#__CI_REF__"]
+}

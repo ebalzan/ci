@@ -1,8 +1,8 @@
 # =============================================================================
-# Promote dev → main — tracebim-ci's own evergreen promotion PR.
+# Promote dev → main — this repo's own evergreen promotion PR.
 #
 # Thin caller of the reusable promote-dev-to-main.yml by local path. Merging
-# the PR it opens releases tracebim-ci (self-release.yml), which moves the
+# the PR it opens releases this repo (self-release.yml), which moves the
 # major tag every repo pins — so merging it ships the change to every repo.
 # Review it accordingly.
 # =============================================================================
