@@ -5,28 +5,31 @@
 # Lists what exists on the repo, shows it, and deletes it after a typed
 # confirmation. Destructive and irreversible — use --dry-run first.
 #
-# Repository scope by default: this repo is owned by a personal account, which
-# has no org-level Actions config to delete. By default only variables are
-# removed; secret deletion must be requested explicitly.
+# Repository scope by default (organization-level config is never touched).
+# By default only variables are removed; secret deletion must be requested
+# explicitly. Settings and rulesets are not reset here — edit or delete them in
+# the repo's Settings, or let `ebalzan-ci bootstrap --prune` remove managed
+# rulesets no file defines.
 #
 # --env NAME switches to an ENVIRONMENT's config instead of the repository's.
 # The two scopes are separate namespaces — a repo-scope run cannot see, list, or
 # delete an environment's secrets, which is why clearing deploy credentials
 # needs the flag:
 #
-#   bin/gh-reset.sh -C ../tracebim-api --env production --secrets-only --dry-run
+#   ebalzan-ci reset -R owner/repo --env production --secrets-only --dry-run
 #
 # Note that gh-bootstrap.sh strips a _FILE suffix when it sets a secret, so
 # FOO_FILE in a dotenv file is named FOO on GitHub.
 #
-# Re-running gh-bootstrap.sh after a reset restores the repo's variables and
+# Re-running the bootstrap after a reset restores the repo's variables and
 # the merged shared + repo secrets. To remove only keys that no file defines any more, prefer
 # `gh-bootstrap.sh --prune`, which works out the stale set for you.
 #
 # Usage:
-#   bin/gh-reset.sh [options]                 # repo in the current directory
-#   bin/gh-reset.sh -C ../tracebim-api [options]
-#   npm run gh:reset -- [options]             # from inside a repo
+#   ebalzan-ci reset [options]                # repo in the current directory
+#   ebalzan-ci reset -C ../my-repo [options]
+#   ebalzan-ci reset -R owner/repo [options]  # no checkout needed
+#   bin/gh-reset.sh [options]                 # same, from a checkout of ebalzan/ci
 #
 # Options:
 #   -C, --repo-dir DIR    Repo checkout whose remote picks the target (default: .)
@@ -65,7 +68,7 @@ while [[ $# -gt 0 ]]; do
     -m|--match)        MATCH="${2:-}"; shift 2 ;;
     -n|--dry-run)      DRY_RUN=true; shift ;;
     -y|--yes)          ASSUME_YES=true; shift ;;
-    -h|--help)         awk 'NR>1 && /^#/{ sub(/^# ?/, ""); print; next } NR>1{ exit }' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)         print_help "${BASH_SOURCE[0]}"; exit 0 ;;
     *)                 die "Unknown option: $1 (try --help)" ;;
   esac
 done

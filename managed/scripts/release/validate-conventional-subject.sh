@@ -1,13 +1,14 @@
 #!/usr/bin/env sh
 #
-# MANAGED BY tracebim-ci (managed/scripts/release/validate-conventional-subject.sh).
-# Do not edit this copy: change it in tracebim-ci, then run
-# `bin/sync-managed.sh --all`. PR Checks fails while a repo's copy differs.
+# MANAGED BY ebalzan/ci (managed/scripts/release/validate-conventional-subject.sh).
+# Run it through the CLI (`ebalzan-ci commit-msg`) rather than copying it. If a
+# repo still keeps a copy, do not edit it: change it in ebalzan/ci, then run
+# `ebalzan-ci sync-managed --all`. PR Checks fails while a repo's copy differs.
 #
-# The one Conventional Commits rule, used by the husky commit-msg hook (locally)
-# and by tracebim-ci's PR-title check (in CI). The allowed types must match
-# branchReleaseTypes in tracebim-ci scripts/release/release-utils.mjs and
-# TYPE_CONFIG in actions/auto-work-items/src/config.ts.
+# The one Conventional Commits rule, used by the husky commit-msg hook (locally,
+# via `ebalzan-ci commit-msg`) and by the shared PR-title check (in CI). The
+# allowed types must match branchReleaseTypes in scripts/release/release-utils.mjs
+# and TYPE_CONFIG in actions/auto-work-items/src/config.ts.
 set -eu
 
 subject="${1-}"

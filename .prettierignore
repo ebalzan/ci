@@ -1,0 +1,3 @@
+# Generated: tsc output (committed for the actions) and the lockfile.
+actions/auto-work-items/dist/
+package-lock.json

@@ -2,3 +2,5 @@ node_modules/
 # Real secrets — only the .example files are committed.
 /config/secrets.env
 /config/secrets.*.env
+# npm pack output.
+*.tgz

@@ -1,5 +1,6 @@
 // Accepted branch prefixes. Keep in sync with TYPE_CONFIG in
-// .github/scripts/auto-work-items/src/config.ts.
+// actions/auto-work-items/src/config.ts and the managed validator
+// (managed/scripts/release/validate-conventional-subject.sh).
 const branchReleaseTypes = new Map([
   ['feat', 'minor'],
   ['fix', 'patch'],

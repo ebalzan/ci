@@ -5,8 +5,8 @@ exports.applyRepoVars = applyRepoVars;
 exports.applySharedVars = applySharedVars;
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
-// The shared variables, read from the copy of tracebim-ci the runner downloaded
-// for `uses: ebalzan/tracebim-ci/actions/auto-work-items@<ref>` (the whole repo
+// The shared variables, read from the copy of this repo the runner downloaded
+// for `uses: ebalzan/ci/actions/auto-work-items@<ref>` (the whole repo
 // at that ref; dist/ → auto-work-items/ → actions/ → repo root). Nothing copies
 // them onto the calling repos, so a shared value changes by moving the ref.
 // scripts/release/promote-dev-to-main.mjs reads the same file the same way.

@@ -1,4 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>ebalzan/tracebim-ci//renovate/tooling#v1"]
+  "extends": ["github>ebalzan/ci//renovate/tooling#v1"]
 }

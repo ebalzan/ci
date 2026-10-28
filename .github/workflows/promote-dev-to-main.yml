@@ -8,9 +8,10 @@
 # approval gate. Review it accordingly.
 #
 # The PR is opened ready for review and added to the same Projects (v2) board
-# as auto-work-items (AUTO_PROJECT_NUMBER / AUTO_PROJECT_OWNER). It is assigned
+# as auto-work-items (AUTO_PROJECT_NUMBER / AUTO_PROJECT_OWNER), when one is
+# configured. It is assigned
 # to whoever pushed to dev, labelled with `release` plus the type of every
-# promoted commit, and put on the AUTO_MILESTONE_TITLE milestone.
+# promoted commit, and put on the AUTO_MILESTONE_TITLE milestone (if set).
 #
 # GH_PROJECT_TOKEN (classic PAT): lets the opened PR trigger PR Checks, and its
 # `project` scope lets it write to the board; the default GITHUB_TOKEN can do
@@ -51,14 +52,9 @@ jobs:
         with:
           node-version: 24
 
-      - uses: ebalzan/tracebim-ci/actions/promote@v1
+      - uses: ebalzan/ci/actions/promote@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PROJECT_TOKEN || github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPO_VARS_JSON: ${{ toJSON(vars) }}
-          # TRANSITIONAL — remove once v1 includes applyRepoVars (the release after 1.2.0).
-          # tracebim-ci's self-* callers run this workflow at the pushed commit but the
-          # action at v1, whose loader ignores REPO_VARS_JSON. A job-env value wins over
-          # REPO_VARS_JSON, so this is harmless after the release.
-          AUTO_PROJECT_NUMBER: ${{ vars.AUTO_PROJECT_NUMBER }}
           PROMOTION_ASSIGNEE: ${{ github.actor }}
