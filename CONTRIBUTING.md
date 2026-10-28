@@ -64,10 +64,10 @@ Check with `npm pack --dry-run`.
 
 PR Checks (`self-pr-checks.yml`) runs, in parallel:
 
-| Job     | Runs                                                                                                     |
-| ------- | -------------------------------------------------------------------------------------------------------- |
-| `title` | The shared PR-title check, from the local workflow file.                                                 |
-| `check` | `npm run check` (build, `dist/` committed, `bash -n`, `node --check`), `npm test`, `npm pack --dry-run`. |
+| Job     | Runs                                                                                                                                                                         |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title` | The shared PR-title check, from the local workflow file.                                                                                                                     |
+| `check` | `npm run check` (build, `dist/` committed, `bash -n`, `node --check`), `npm run format:check` (Prettier with the `@ebalzan/config` rules), `npm test`, `npm pack --dry-run`. |
 
 The tests never touch GitHub: they use throwaway git repos and run `gh` with an
 empty config directory, so it is logged out. What they cover:
@@ -77,8 +77,8 @@ empty config directory, so it is logged out. What they cover:
 | `release-utils.test.mjs` | Bump rules, breaking changes, branch types, semver.                                                                                                             |
 | `rules.test.mjs`         | The commit types agree across validator / release-utils / TYPE_CONFIG; JSON merge; shipped rulesets and settings are well-formed and cannot break `sync-dev`.   |
 | `cli.test.mjs`           | Command dispatch, `commit-msg` on subjects and message files, `--help` forwarding.                                                                              |
-| `onboard.test.mjs`       | Dry run, template rendering, Node vs non-Node repos, keep vs `--force`, refusals.                                                                               |
-| `bootstrap.test.mjs`     | Dry-run plans: layer labels, settings/ruleset merging, shared secrets dir, `--skip`.                                                                            |
+| `onboard.test.mjs`       | Dry run, template rendering, Node vs non-Node repos, keep vs `--force`, refusals, `.gitignore` lines, `@ebalzan/config` wiring.                                 |
+| `bootstrap.test.mjs`     | Dry-run plans: layer labels, settings/ruleset merging, shared and per-repo secrets dirs, `--skip`.                                                              |
 | `release.test.mjs`       | `release-main.mjs` end to end against a local bare origin and a fake GitHub API: tag-only and `package.json` releases, re-runs, no-conventional-commit failure. |
 
 To try a command for real against a repo of yours, use `--dry-run` first; the
@@ -104,6 +104,9 @@ Rules worth knowing:
   PRs run the workflow files at the PR commit but the actions at the last
   release (below).
 - **Bash 3.2** (macOS `/bin/bash`): no associative arrays, no `mapfile`.
+- **Formatting** comes from `@ebalzan/config` (`"prettier"` in `package.json`):
+  run `npm run format` before committing. Code-style rules change there, not
+  here ([ARCHITECTURE §10](docs/ARCHITECTURE.md#10-the-two-packages-ebalzanci-and-ebalzanconfig)).
 - **Docs are part of the change.** A new variable goes in
   [docs/CONFIGURATION.md](docs/CONFIGURATION.md), a new option in
   [docs/CLI.md](docs/CLI.md) and the script's header (its `--help`).

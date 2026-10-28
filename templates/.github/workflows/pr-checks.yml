@@ -30,9 +30,19 @@ jobs:
     with:
       runs-on: __RUNS_ON__
 
-  # check:
-  #   name: Build and test
+  # A Node repo's own checks. Uncomment and adapt; other stacks replace the
+  # steps (e.g. `go test ./...`).
+  # validate:
+  #   name: Validate
   #   runs-on: __RUNS_ON__
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - run: make test
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 24
+  #         cache: npm
+  #     - run: npm ci
+  #     # Prettier/ESLint/TypeScript extend @ebalzan/config instead of copying it.
+  #     - run: npx --no-install ebalzan-config verify
+  #     # The repo's own script: format:check, lint, typecheck, test, …
+  #     - run: npm run validate

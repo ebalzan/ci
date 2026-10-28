@@ -99,14 +99,19 @@ independent.
 ```text
                   shared (lower precedence)               <repo>/.github/ (wins)
 variables         config/actions.env                  +   actions.env              → shared read at run time; repo's → repository variables
-repo secrets      <shared secrets dir>/secrets.env    +   secrets.env              → repository secrets
-env secrets       <shared secrets dir>/secrets.<env>.env + secrets.<env>.env      → environment <env> secrets
+repo secrets      <shared secrets dir>/secrets.env    +   secrets.env ¹            → repository secrets
+env secrets       <shared secrets dir>/secrets.<env>.env + secrets.<env>.env ¹    → environment <env> secrets
 ```
 
 `config/actions.env` ships inside this repo (and the npm package). The
 **shared secrets dir** is wherever you keep your shared secrets — they are never
 committed: `$CI_SECRETS_DIR` if set, else `config/` when you run the tools from
 a git checkout of ebalzan/ci, else `~/.config/ebalzan-ci/`.
+
+¹ A repo's own secrets files live in `repos/<owner>/<repo>/` inside the shared
+secrets dir when that folder exists — recommended: every repo's secrets in one
+place, outside any git working tree, synced without checkouts. Otherwise they
+are the gitignored files in the repo's `.github/`.
 
 The two columns combine key by key — **the repo's value wins**. For secrets,
 `bootstrap` merges them and writes the result onto the repository. For
@@ -182,8 +187,8 @@ deploy approval**: review it as the approval it is.
 | `…/secrets*.env.example`                          | placeholders / templates             | ✅ Yes       |
 | `.github/bootstrap.conf`                          | per-repo tool settings (below)       | ✅ Yes       |
 
-Add `.github/secrets*.env` to each repo's `.gitignore` (keep the `.example`
-files).
+Secrets files kept in a checkout must be gitignored — `onboard` adds
+`/.github/secrets*.env` (keeping the `.example` files) to `.gitignore`.
 
 > **The filename is the destination.** `actions.env` / `secrets.env` land on
 > the repository; a `.<name>` infix always targets the GitHub environment it is
@@ -199,9 +204,10 @@ files).
 - **Guards.** Empty values and placeholders (`xxxx`, `sk-ant-xxx`,
   `github_pat_xxx`) are refused: a secret cannot be read back to notice a bad
   write. A missing secrets file is seeded from its `.example` on first run.
-- **Remote mode** (`bootstrap -R owner/repo` with no local checkout) only sees
-  committed files, so it syncs the shared secrets but not the repo's own, and
-  never prunes secrets.
+- **Remote mode** (`bootstrap -R owner/repo` with no local checkout) reads the
+  repo's committed files through the API and its secrets from
+  `repos/<owner>/<repo>/`. Without that folder it syncs only the shared secrets,
+  and never prunes secrets.
 
 Real secrets never enter git. These are **Actions** secrets, unrelated to any
 app's runtime `.env`.
@@ -215,9 +221,9 @@ app's runtime `.env`.
 1. **GitHub CLI** — <https://cli.github.com> (`gh --version`), authenticated
    with the `project` scope if you use boards: `gh auth login && gh auth refresh -s project`.
 2. **Admin** on every target repo.
-3. For `--all` with each repo's own secrets: the repos checked out side by side
-   under one directory (`CI_REPOS_ROOT`, default: next to the ebalzan/ci
-   checkout). Repos without a checkout are synced in remote mode.
+3. Each repo's own secrets in `~/.config/ebalzan-ci/repos/<owner>/<repo>/` —
+   then `--all` needs no checkouts. (Alternatively in each checkout's
+   `.github/`, with the repos side by side under `CI_REPOS_ROOT`.)
 
 ### Fill in the secrets
 
@@ -225,7 +231,9 @@ app's runtime `.env`.
 mkdir -p ~/.config/ebalzan-ci
 cp "$(npx --no-install ebalzan-ci path)/config/secrets.env.example" ~/.config/ebalzan-ci/secrets.env
 $EDITOR ~/.config/ebalzan-ci/secrets.env
-# plus each repo's own: <repo>/.github/secrets*.env
+# plus each repo's own, e.g.:
+mkdir -p ~/.config/ebalzan-ci/repos/owner/my-api
+$EDITOR ~/.config/ebalzan-ci/repos/owner/my-api/secrets.production.env
 ```
 
 > **Why a separate `GH_PROJECT_TOKEN`?** The built-in `GITHUB_TOKEN` cannot write

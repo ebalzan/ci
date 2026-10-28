@@ -18,8 +18,8 @@ Every knob, its default, and who reads it. For _where_ a value should live
 ```text
                      SHARED (lower precedence)                  REPO (wins)
 Actions variables    config/actions.env                    +    .github/actions.env
-repository secrets   <shared secrets dir>/secrets.env      +    .github/secrets.env
-environment secrets  <shared secrets dir>/secrets.<env>.env +   .github/secrets.<env>.env
+repository secrets   <shared secrets dir>/secrets.env      +    <repo secrets dir>/secrets.env
+environment secrets  <shared secrets dir>/secrets.<env>.env +   <repo secrets dir>/secrets.<env>.env
 repository settings  config/repo-settings.json             +    .github/repo-settings.json
 branch rulesets      config/rulesets/<file>.json           +    .github/rulesets/<file>.json
 ```
@@ -29,7 +29,9 @@ branch rulesets      config/rulesets/<file>.json           +    .github/rulesets
   repo's own keys are pushed to GitHub, by `ebalzan-ci bootstrap`.
 - **Secrets** — merged at sync time by `bootstrap`. The shared secrets dir is
   `$CI_SECRETS_DIR`, else `config/` in a git checkout of this repo, else
-  `~/.config/ebalzan-ci/`.
+  `~/.config/ebalzan-ci/`. A repo's secrets dir is `repos/<owner>/<repo>/`
+  inside it when that folder exists (recommended), else the checkout's
+  `.github/`.
 - **Settings and rulesets** — JSON, deep-merged by `bootstrap`: objects merge
   key by key, arrays are replaced whole. Top-level keys starting with `$` are
   comments.
@@ -137,14 +139,14 @@ four lines long.
 
 ### In each repo (`.github/`)
 
-| File                   | Committed?            | Contents                                                                         |
-| ---------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `actions.env`          | yes                   | The repo's own variables (dotenv).                                               |
-| `secrets.env`          | **no** (gitignore it) | The repo's own repository secrets. `secrets.env.example` beside it is committed. |
-| `secrets.<env>.env`    | **no**                | Secrets for GitHub environment `<env>`, created by bootstrap.                    |
-| `bootstrap.conf`       | yes                   | `LOCAL_ONLY_KEYS=A B C` — secret keys only local tools read; never pushed.       |
-| `repo-settings.json`   | yes                   | Overrides of `config/repo-settings.json`.                                        |
-| `rulesets/<file>.json` | yes                   | Overrides of the shared ruleset with the same file name, or extra rulesets.      |
+| File                   | Committed?          | Contents                                                                                                                                                 |
+| ---------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions.env`          | yes                 | The repo's own variables (dotenv).                                                                                                                       |
+| `secrets.env`          | **no** (gitignored) | The repo's own repository secrets, when they are not in `repos/<owner>/<repo>/` of the shared secrets dir. `secrets.env.example` beside it is committed. |
+| `secrets.<env>.env`    | **no**              | Secrets for GitHub environment `<env>`, created by bootstrap. Same fallback rule.                                                                        |
+| `bootstrap.conf`       | yes                 | `LOCAL_ONLY_KEYS=A B C` — secret keys only local tools read; never pushed.                                                                               |
+| `repo-settings.json`   | yes                 | Overrides of `config/repo-settings.json`.                                                                                                                |
+| `rulesets/<file>.json` | yes                 | Overrides of the shared ruleset with the same file name, or extra rulesets.                                                                              |
 
 ### In this repo (`config/`)
 

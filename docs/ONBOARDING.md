@@ -29,7 +29,9 @@ Once per machine:
 
    [config/secrets.env.example](../config/secrets.env.example) explains each one,
    and [CONFIGURATION.md](CONFIGURATION.md#secrets) explains why the token must be
-   classic.
+   classic. A repo's **own** secrets (deploy credentials, …) go next to them, in
+   `~/.config/ebalzan-ci/repos/<owner>/<repo>/secrets.env` and
+   `secrets.<environment>.env` ([ARCHITECTURE §7](ARCHITECTURE.md#7-where-you-run-commands)).
 
 ---
 
@@ -51,9 +53,13 @@ Onboard   owner/my-repo  ←  ebalzan/ci@v2 (runs-on: ubuntu-latest)
     create     .github/workflows/promote-dev-to-main.yml
     create     .github/workflows/release.yml
     create     .husky/commit-msg
+    create     eslint.config.mjs
     create     renovate.json
+    update     .gitignore (ignore .github/secrets*.env)
+    update     package.json "prettier": "@ebalzan/config/prettier"
   npm
     install --save-dev @ebalzan/ci@^2.0.0 (and husky, if missing)
+    install --save-dev --save-exact @ebalzan/config (and eslint, prettier, if missing)
   GitHub (owner/my-repo)
     create branch dev from origin/main
     add topic 'ebalzan-ci'
@@ -86,11 +92,17 @@ yourself later), `--force` to replace files the repo already has. All options:
    `__CI_REF__` with `v2` and `__RUNS_ON__` with your runner label.
 3. **Variables.** Copy [templates/.github/actions.env](../templates/.github/actions.env)
    to `.github/actions.env` and set what the repo needs (often nothing, or just
-   `AUTO_PROJECT_NUMBER`). Gitignore `.github/secrets*.env`.
+   `AUTO_PROJECT_NUMBER`). Add `/.github/secrets.env`, `/.github/secrets.*.env`
+   and `!/.github/secrets*.env.example` to `.gitignore`.
 4. **Hook** (Node repos): `npm install --save-dev @ebalzan/ci husky`, add
    `"prepare": "husky"` to `scripts`, and copy
    [templates/.husky/commit-msg](../templates/.husky/commit-msg) to
    `.husky/commit-msg` (fill `__CI_REPO__`, `__CI_REPO_NAME__`, `__CI_PACKAGE__`).
+   **Code style** (Node repos): `npm install --save-dev --save-exact
+@ebalzan/config eslint prettier`, set `"prettier": "@ebalzan/config/prettier"`
+   in `package.json`, copy [templates/eslint.config.mjs](../templates/eslint.config.mjs),
+   and make `tsconfig.json` extend `@ebalzan/config/tsconfig/node.json`. Check
+   with `npx ebalzan-config verify`.
 5. **Renovate** (optional): install the [Renovate app](https://github.com/apps/renovate)
    on the repo and commit `renovate.json` extending
    `github>ebalzan/ci//renovate/tooling#v2`.
@@ -120,11 +132,12 @@ yourself later), `--force` to replace files the repo already has. All options:
 What is shared and what is now the repo's own, stage by stage:
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- **Ignore the secrets files before creating any.** `onboard` does not edit
-  `.gitignore`; add `/.github/secrets.env`, `/.github/secrets.*.env` and
-  `!/.github/secrets*.env.example`.
 - **Add the repo's own checks** to `pr-checks.yml` — the template has a
-  commented `check` job. They run in parallel with `title`.
+  commented `validate` job (`npm ci`, `ebalzan-config verify`, `npm run
+validate`). They run in parallel with `title`.
+- **Own Prettier/ESLint/TypeScript config?** `onboard` keeps it and says so.
+  Make it extend `@ebalzan/config` instead of copying rules, then
+  `npx ebalzan-config verify` passes ([ARCHITECTURE §10](ARCHITECTURE.md#10-the-two-packages-ebalzanci-and-ebalzanconfig)).
 - **Add the deploy** to `release.yml` — the template has a commented `deploy`
   job. Gate it with `if: needs.release.outputs.tag != ''`. For anything beyond
   a one-liner, use a repo-local `deploy.yml` plus a manual `redeploy.yml`:

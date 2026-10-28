@@ -8,14 +8,19 @@
 #   2. writes the templates/ files: the four thin workflow callers, a starter
 #      .github/actions.env, renovate.json and, for a Node repo, the husky
 #      commit-msg hook. A file that already exists is kept (--force replaces it);
-#   3. for a Node repo (package.json), installs this package and husky as
-#      devDependencies and sets `prepare: husky` when no prepare script exists;
-#   4. commits it all as `ci: onboard <ci repo>`.
+#   3. adds the .github/secrets*.env files to .gitignore when they are not
+#      ignored yet (before any secret file exists);
+#   4. for a Node repo (package.json): installs this package and husky as
+#      devDependencies, sets `prepare: husky` when no prepare script exists,
+#      and wires the code-style rules of @ebalzan/config — package.json
+#      "prettier" and an eslint.config.mjs — where the repo has no Prettier or
+#      ESLint config of its own (--no-config skips this);
+#   5. commits it all as `ci: onboard <ci repo>`.
 # Then, unless --no-push:
-#   5. creates the dev branch on GitHub if it is missing;
-#   6. tags the repo with REPOS_TOPIC (config/repos.env), so `--all` finds it;
-#   7. runs the bootstrap (variables, secrets, settings, rulesets);
-#   8. pushes the branch. The auto-pr.yml it adds runs on that very push and
+#   6. creates the dev branch on GitHub if it is missing;
+#   7. tags the repo with REPOS_TOPIC (config/repos.env), so `--all` finds it;
+#   8. runs the bootstrap (variables, secrets, settings, rulesets);
+#   9. pushes the branch. The auto-pr.yml it adds runs on that very push and
 #      opens the tracking issue and the PR into dev. Review and squash-merge it.
 #
 # Usage:
@@ -30,6 +35,7 @@
 #       --branch NAME      Branch to commit on (default: ci/onboard-ebalzan-ci)
 #       --force            Overwrite files that already exist
 #       --no-npm           Skip the npm installs even when package.json exists
+#       --no-config        Do not wire @ebalzan/config (Prettier, ESLint)
 #       --no-push          Stop after the local commit (no GitHub changes at all)
 #   -n, --dry-run          Show what would happen; change nothing
 #   -y, --yes              Skip the confirmations (also for the bootstrap)
@@ -59,6 +65,8 @@ REF="v${CI_VERSION%%.*}"
 BRANCH="ci/onboard-ebalzan-ci"
 FORCE=false
 NPM=true
+CONFIG=true
+CONFIG_PACKAGE="@ebalzan/config"
 PUSH=true
 DRY_RUN=false
 ASSUME_YES=false
@@ -71,6 +79,7 @@ while [[ $# -gt 0 ]]; do
     --branch)      BRANCH="${2:-}"; shift 2 ;;
     --force)       FORCE=true; shift ;;
     --no-npm)      NPM=false; shift ;;
+    --no-config)   CONFIG=false; shift ;;
     --no-push)     PUSH=false; shift ;;
     -n|--dry-run)  DRY_RUN=true; shift ;;
     -y|--yes)      ASSUME_YES=true; shift ;;
@@ -117,25 +126,69 @@ fi
 
 IS_NODE=false
 [[ -f "$REPO_DIR/package.json" ]] && IS_NODE=true
+$IS_NODE || CONFIG=false
+
+# present FILE... — the given repo-relative paths that exist, space-separated.
+present() {
+  local f out=""
+  for f in "$@"; do [[ -e "$REPO_DIR/$f" ]] && out+="$f "; done
+  printf '%s' "${out% }"
+}
+PRETTIER_FILES=(.prettierrc .prettierrc.json .prettierrc.json5 .prettierrc.yaml .prettierrc.yml .prettierrc.toml
+  .prettierrc.js .prettierrc.cjs .prettierrc.mjs .prettierrc.ts prettier.config.js prettier.config.cjs
+  prettier.config.mjs prettier.config.ts)
+ESLINT_FILES=(eslint.config.js eslint.config.cjs eslint.config.mjs eslint.config.ts eslint.config.mts
+  eslint.config.cts .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.json .eslintrc.yaml .eslintrc.yml)
 
 # ---- plan --------------------------------------------------------------------
-# applies REL — whether template REL belongs in this repo at all.
+# applies REL — whether template REL belongs in this repo at all; when it does
+# not, SKIP_REASON says why.
+SKIP_REASON=""
 applies() {
+  local f
   case "$1" in
-    .husky/*) $IS_NODE; return ;;
+    .husky/*)
+      $IS_NODE || { SKIP_REASON="no package.json"; return 1; } ;;
+    eslint.config.mjs)
+      $CONFIG || { SKIP_REASON="$($IS_NODE && echo '--no-config' || echo 'no package.json')"; return 1; }
+      # A repo with its own ESLint config extends the preset there; never add a second one.
+      f="$(present "${ESLINT_FILES[@]}")"
+      if [[ -n "$f" && "$f" != eslint.config.mjs ]]; then SKIP_REASON="repo has $f — extend $CONFIG_PACKAGE/eslint/node there"; return 1; fi ;;
     renovate.json)
       # Any existing Renovate config is the repo's own; extend the preset there.
-      local f
       for f in renovate.json renovate.json5 .renovaterc .renovaterc.json .github/renovate.json .github/renovate.json5; do
-        if [[ -e "$REPO_DIR/$f" ]] && ! $FORCE; then return 1; fi
+        if [[ -e "$REPO_DIR/$f" ]] && ! $FORCE; then SKIP_REASON="repo has its own Renovate config"; return 1; fi
       done ;;
   esac
   return 0
 }
 
+# Secrets files must be ignored before the first one exists.
+GITIGNORE=false
+if ! git_ check-ignore -q .github/secrets.env || ! git_ check-ignore -q .github/secrets.production.env; then
+  GITIGNORE=true
+fi
+
+# Prettier: point package.json at the shared config unless the repo has its own.
+PRETTIER_SET=false
+PRETTIER_OWN=""
+if $CONFIG; then
+  PRETTIER_OWN="$(present "${PRETTIER_FILES[@]}")"
+  if [[ -z "$PRETTIER_OWN" ]] && [[ "$(cd "$REPO_DIR" && npm pkg get prettier)" == "{}" ]]; then
+    PRETTIER_SET=true
+  elif [[ -z "$PRETTIER_OWN" ]]; then
+    PRETTIER_OWN="package.json \"prettier\""
+  fi
+fi
+# TypeScript is reported, never edited: tsconfig files are JSON with comments.
+TSCONFIG_NOTE=""
+if $CONFIG && [[ -f "$REPO_DIR/tsconfig.json" ]] && ! grep -q "$CONFIG_PACKAGE/tsconfig/" "$REPO_DIR/tsconfig.json"; then
+  TSCONFIG_NOTE="tsconfig.json does not extend $CONFIG_PACKAGE/tsconfig/*.json — add \"extends\" by hand"
+fi
+
 PLAN=()   # "action<TAB>rel" with action = create | overwrite | keep | skip
 while IFS= read -r rel; do
-  if ! applies "$rel"; then PLAN+=("skip	$rel")
+  if ! applies "$rel"; then PLAN+=("skip	$rel	$SKIP_REASON")
   elif [[ -e "$REPO_DIR/$rel" ]]; then
     if $FORCE; then PLAN+=("overwrite	$rel"); else PLAN+=("keep	$rel"); fi
   else PLAN+=("create	$rel")
@@ -147,16 +200,21 @@ info "${BOLD}Onboard${RESET}   ${DIM}${REPO:-$(basename "$REPO_DIR")}  ←  $CI_
 info ""
 info "  ${BOLD}files${RESET} ${DIM}(branch $BRANCH from $BASE_REF)${RESET}"
 for entry in "${PLAN[@]}"; do
-  action="${entry%%	*}"; rel="${entry#*	}"
+  IFS='	' read -r action rel reason <<< "$entry"
   case "$action" in
     create|overwrite) printf '    %-10s %s\n' "$action" "$rel" ;;
     keep)             printf '    %s%-10s %s (exists — --force replaces it)%s\n' "$DIM" keep "$rel" "$RESET" ;;
-    skip)             printf '    %s%-10s %s (%s)%s\n' "$DIM" skip "$rel" "$([[ "$rel" == .husky/* ]] && echo 'no package.json' || echo 'repo has its own Renovate config')" "$RESET" ;;
+    skip)             printf '    %s%-10s %s (%s)%s\n' "$DIM" skip "$rel" "$reason" "$RESET" ;;
   esac
 done
+$GITIGNORE && printf '    %-10s %s\n' update ".gitignore (ignore .github/secrets*.env)"
+$PRETTIER_SET && printf '    %-10s %s\n' update "package.json \"prettier\": \"$CONFIG_PACKAGE/prettier\""
+[[ -z "$PRETTIER_OWN" ]] || info "    ${DIM}keep       $PRETTIER_OWN (own Prettier config — extend $CONFIG_PACKAGE/prettier there)${RESET}"
+[[ -z "$TSCONFIG_NOTE" ]] || info "    ${DIM}note       $TSCONFIG_NOTE${RESET}"
 if $IS_NODE && $NPM; then
   info "  ${BOLD}npm${RESET}"
   info "    install --save-dev $CI_PACKAGE@^${CI_VERSION%%.*}.0.0 (and husky, if missing)"
+  ! $CONFIG || info "    install --save-dev --save-exact $CONFIG_PACKAGE (and eslint, prettier, if missing)"
 fi
 if $PUSH; then
   info "  ${BOLD}GitHub${RESET} ${DIM}($REPO)${RESET}"
@@ -189,9 +247,25 @@ render() { # render REL — template → repo, placeholders filled in
 }
 
 for entry in "${PLAN[@]}"; do
-  action="${entry%%	*}"; rel="${entry#*	}"
+  IFS='	' read -r action rel reason <<< "$entry"
   case "$action" in create|overwrite) render "$rel"; ok "$action $rel" ;; esac
 done
+
+if $GITIGNORE; then
+  [[ ! -s "$REPO_DIR/.gitignore" ]] || [[ -z "$(tail -c1 "$REPO_DIR/.gitignore")" ]] || printf '\n' >> "$REPO_DIR/.gitignore"
+  cat >> "$REPO_DIR/.gitignore" <<'GITIGNORE'
+
+# Actions secrets, synced by `ebalzan-ci bootstrap`. Never commit them.
+/.github/secrets.env
+/.github/secrets.*.env
+!/.github/secrets*.env.example
+GITIGNORE
+  ok "update .gitignore"
+fi
+
+if $PRETTIER_SET; then
+  (cd "$REPO_DIR" && npm pkg set "prettier=$CONFIG_PACKAGE/prettier") && ok "set package.json \"prettier\""
+fi
 
 if $IS_NODE && $NPM; then
   step "Installing devDependencies"
@@ -202,6 +276,16 @@ if $IS_NODE && $NPM; then
   fi
   if [[ "$(cd "$REPO_DIR" && npm pkg get scripts.prepare)" == "{}" ]]; then
     (cd "$REPO_DIR" && npm pkg set scripts.prepare=husky) && ok "set scripts.prepare = husky"
+  fi
+  if $CONFIG; then
+    # Its peers are pinned by the repo, so add the ones it does not list yet.
+    config_pkgs=("$CONFIG_PACKAGE")
+    for peer in eslint prettier; do
+      (cd "$REPO_DIR" && node -e 'const p=require("./package.json");process.exit({...p.dependencies,...p.devDependencies}[process.argv[1]]?0:1)' "$peer") \
+        || config_pkgs+=("$peer")
+    done
+    (cd "$REPO_DIR" && npm install --save-dev --save-exact --no-audit --no-fund "${config_pkgs[@]}") \
+      || warn "Could not install ${config_pkgs[*]}. Install them before running Prettier or ESLint."
   fi
 fi
 
@@ -252,4 +336,5 @@ info "  1. The PR into dev opens within a minute (auto-pr.yml). If it does not:"
 info "     https://github.com/$REPO/compare/dev...$BRANCH"
 info "  2. Add the repo's own checks to .github/workflows/pr-checks.yml and its"
 info "     ship job to release.yml (both have a commented example)."
+[[ -z "$TSCONFIG_NOTE" ]] || info "  ·  $TSCONFIG_NOTE"
 info "  3. Squash-merge the PR, then the dev → main PR: the first release."

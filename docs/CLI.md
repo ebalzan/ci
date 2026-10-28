@@ -42,7 +42,8 @@ ebalzan-ci onboard [-C DIR] [options]
 | `--ref REF`             | `v<major of the package>` | Ref the callers pin. Keep the major tag (`v2`); an exact version only freezes the workflow files ([why](ARCHITECTURE.md#9-versions-what-a-pin-freezes)) |
 | `--branch NAME`         | `ci/onboard-ebalzan-ci`   | Branch the files are committed on                                                                                                                       |
 | `--force`               | off                       | Replace files that already exist (default: keep them)                                                                                                   |
-| `--no-npm`              | off                       | Do not install the package and husky, even with a `package.json`                                                                                        |
+| `--no-npm`              | off                       | Do not install packages, even with a `package.json` (files and `package.json` fields are still written)                                                 |
+| `--no-config`           | off                       | Do not wire `@ebalzan/config` (Prettier, ESLint)                                                                                                        |
 | `--no-push`             | off                       | Stop after the local commit: GitHub is not touched at all                                                                                               |
 | `-n, --dry-run`         | off                       | Print the plan; change nothing                                                                                                                          |
 | `-y, --yes`             | off                       | No confirmation prompts (also for the bootstrap it runs)                                                                                                |
@@ -54,13 +55,21 @@ What it does, in order:
    exist yet.
 3. Writes the [templates](../templates/) with `__CI_REPO__`, `__CI_REF__` and
    `__RUNS_ON__` filled in. Existing files are kept unless `--force`. The husky
-   hook is only written for a repo with `package.json`; `renovate.json` is
-   skipped when the repo has its own Renovate config.
-4. Node repos: `npm install --save-dev @ebalzan/ci@^<major>` and husky (if
-   missing), and `scripts.prepare = "husky"` when there is no prepare script.
-   A failure here only warns.
-5. Commits as `ci: onboard ebalzan/ci shared workflows and rules`.
-6. Unless `--no-push`, after one confirmation: creates `dev` on GitHub from the
+   hook and `eslint.config.mjs` are only written for a repo with `package.json`
+   (and `eslint.config.mjs` only when it has no ESLint config of its own);
+   `renovate.json` is skipped when the repo has its own Renovate config.
+4. Appends the `.github/secrets*.env` ignore lines to `.gitignore`, unless those
+   files are already ignored.
+5. Node repos, code style (unless `--no-config`): sets `package.json`
+   `"prettier": "@ebalzan/config/prettier"` when the repo has no Prettier config
+   of its own. A `tsconfig.json` that does not extend
+   `@ebalzan/config/tsconfig/*` is reported, never edited.
+6. Node repos, installs (unless `--no-npm`): `@ebalzan/ci@^<major>` and husky (if
+   missing), `scripts.prepare = "husky"` when there is no prepare script, and
+   `@ebalzan/config` with its peers `eslint` and `prettier` (if missing), at
+   exact versions. A failure here only warns.
+7. Commits as `ci: onboard ebalzan/ci shared workflows and rules`.
+8. Unless `--no-push`, after one confirmation: creates `dev` on GitHub from the
    default branch if missing, adds the `REPOS_TOPIC` topic, runs
    [`bootstrap`](#bootstrap), pushes the branch. The `auto-pr.yml` just added
    runs on that push and opens the issue and the PR into `dev`.
@@ -93,22 +102,30 @@ ebalzan-ci bootstrap --all --dry-run      # every managed repo, plan only
 
 Sections, in the order they are applied:
 
-| Section    | From                                                                       | To GitHub                                                 |
-| ---------- | -------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `vars`     | the repo's `.github/actions.env` only (shared ones are read at run time)   | repository variables                                      |
-| `secrets`  | shared `secrets.env` + repo `.github/secrets.env`, and `secrets.<env>.env` | repository secrets; environment `<env>` (created) secrets |
-| `settings` | `config/repo-settings.json` deep-merged with `.github/repo-settings.json`  | `PATCH /repos/{repo}` (only changed keys are listed)      |
-| `rulesets` | each `config/rulesets/X.json` deep-merged with `.github/rulesets/X.json`   | created, or updated by `name`                             |
+| Section    | From                                                                                                        | To GitHub                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `vars`     | the repo's `.github/actions.env` only (shared ones are read at run time)                                    | repository variables                                      |
+| `secrets`  | shared `secrets.env` + the repo's `secrets.env`, and `secrets.<env>.env` (from the repo secrets dir, below) | repository secrets; environment `<env>` (created) secrets |
+| `settings` | `config/repo-settings.json` deep-merged with `.github/repo-settings.json`                                   | `PATCH /repos/{repo}` (only changed keys are listed)      |
+| `rulesets` | each `config/rulesets/X.json` deep-merged with `.github/rulesets/X.json`                                    | created, or updated by `name`                             |
 
 **Where the shared secrets come from:** `$CI_SECRETS_DIR` if set; otherwise
 `config/` when running from a git checkout of this repo; otherwise
 `~/.config/ebalzan-ci/` (or `$XDG_CONFIG_HOME/ebalzan-ci/`). A missing file is
 simply no shared secrets.
 
+**Where a repo's own secrets come from:** `repos/<owner>/<repo>/` inside the
+shared secrets dir when that folder exists (matched case-insensitively; the
+checkout's `secrets*.env` are then ignored, with a warning); otherwise the
+checkout's gitignored `.github/`. Keeping them in the shared secrets dir is
+recommended: one folder for every repo, usable without checkouts
+([ARCHITECTURE §7](ARCHITECTURE.md#7-where-you-run-commands)).
+
 **Remote mode** (`-R` without a checkout) reads the repo's committed
 `.github/actions.env`, `bootstrap.conf`, `repo-settings.json` and `rulesets/`
-from its default branch. Its own secrets files are gitignored and so unknown:
-only shared secrets are synced, and secrets are never pruned in this mode.
+from its default branch, and its secrets from `repos/<owner>/<repo>/`. Without
+that folder its secrets are unknown: only shared secrets are synced, and
+secrets are never pruned.
 
 **Guards:** empty and placeholder secret values (`xxxx`, `sk-ant-xxx`,
 `github_pat_xxx`) are refused before anything is sent; a `_FILE` key sets the
@@ -196,13 +213,13 @@ when such a copy drifts. This refreshes those copies (`--install` creates them,
 
 ## Environment variables
 
-| Variable                    | Used by                                 | Meaning                                                                                     |
-| --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `CI_SECRETS_DIR`            | `bootstrap`                             | Directory with the shared `secrets.env` / `secrets.<env>.env`                               |
-| `CI_REPOS_ROOT`             | `bootstrap --all`, `sync-managed --all` | Where local checkouts live: `<root>/<repo name>` (default: next to this package's checkout) |
-| `CI_DIR`                    | the husky hook                          | A checkout of this repo, used when the package is not installed (default `../ci`)           |
-| `XDG_CONFIG_HOME`           | `bootstrap`                             | Base of the default shared secrets dir                                                      |
-| `NO_COLOR` / non-TTY output | all                                     | Plain output without colours                                                                |
+| Variable                    | Used by                                 | Meaning                                                                                                        |
+| --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `CI_SECRETS_DIR`            | `bootstrap`                             | Directory with the shared `secrets.env` / `secrets.<env>.env`, and `repos/<owner>/<repo>/` for each repo's own |
+| `CI_REPOS_ROOT`             | `bootstrap --all`, `sync-managed --all` | Where local checkouts live: `<root>/<repo name>` (default: next to this package's checkout)                    |
+| `CI_DIR`                    | the husky hook                          | A checkout of this repo, used when the package is not installed (default `../ci`)                              |
+| `XDG_CONFIG_HOME`           | `bootstrap`                             | Base of the default shared secrets dir                                                                         |
+| `NO_COLOR` / non-TTY output | all                                     | Plain output without colours                                                                                   |
 
 The pre-2.0 name `TRACEBIM_REPOS_ROOT` is still honoured.
 

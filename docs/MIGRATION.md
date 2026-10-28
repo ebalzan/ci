@@ -92,6 +92,12 @@ order:
    they warn instead of checking (CI still checks), or set
    `TRACEBIM_CI_DIR=../ci`.
 
+9. **Release `@ebalzan/config` 0.2.0**, which drops its copy of the commit rule
+   (the hook and the PR-title check use `@ebalzan/ci`'s). In its checkout, merge
+   the `refact/move-commit-rules-to-ci` branch into `main`, then
+   `npm version minor && git push --follow-tags` (its `publish.yml` publishes
+   the tag).
+
 ---
 
 ## Part 2 — moving a repo to v2
@@ -135,6 +141,20 @@ owner/repo` or `--all`) or with `npx @ebalzan/ci bootstrap`, so the repo
 
    Repo scripts that sourced `${TRACEBIM_CI_DIR:-../tracebim-ci}/bin/_lib.sh`
    become `source "$(npx --no-install ebalzan-ci path)/bin/_lib.sh"`.
+
+   **Code style:** adopt [`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config)
+   (≥ 0.2.0, which no longer has a commit rule of its own). For a repo whose
+   `.prettierrc.json` already holds the shared options, that is
+   `npm install --save-dev --save-exact @ebalzan/config`, deleting
+   `.prettierrc.json`, setting `"prettier": "@ebalzan/config/prettier"`, and
+   replacing the shared part of `eslint.config.*` with
+   `...node` from `@ebalzan/config/eslint/node` (keep the repo's own ignores
+   and blocks). `npx ebalzan-config verify` confirms it.
+
+   **Secrets (optional, recommended):** move the repo's `.github/secrets*.env`
+   into `~/.config/ebalzan-ci/repos/<owner>/<repo>/`. Local scripts that read
+   those files (via `LOCAL_ONLY_KEYS`) must then read them from there too, so
+   move a repo with such scripts last, or leave its secrets in the checkout.
 
 4. **Topic**, so `--all` finds the repo: `gh repo edit owner/repo --add-topic ebalzan-ci`.
 

@@ -9,9 +9,9 @@
 #   variables            config/actions.env                  (read at run time, never pushed)
 #                        <repo>/.github/actions.env          (pushed)
 #   repository secrets   <shared secrets dir>/secrets.env
-#                        <repo>/.github/secrets.env
+#                        <repo secrets dir>/secrets.env
 #   environment secrets  <shared secrets dir>/secrets.<environment>.env
-#   (environment <name>) <repo>/.github/secrets.<environment>.env
+#   (environment <name>) <repo secrets dir>/secrets.<environment>.env
 #   repository settings  config/repo-settings.json           (deep-merged JSON)
 #                        <repo>/.github/repo-settings.json
 #   branch rulesets      config/rulesets/<file>.json         (deep-merged per file name)
@@ -25,6 +25,10 @@
 # Shared secrets dir: $CI_SECRETS_DIR if set; else config/ when this is a git
 # checkout of ebalzan/ci; else ${XDG_CONFIG_HOME:-~/.config}/ebalzan-ci (the
 # place for them when the tools run from the npm package).
+#
+# Repo secrets dir: <shared secrets dir>/repos/<owner>/<repo>/ when it exists
+# (recommended: every repo's secrets in one place outside git, usable without
+# a checkout); else the checkout's .github/ (gitignored files).
 #
 # Variables vs secrets. Shared VARIABLES are not copied onto repos: the actions
 # read config/actions.env from the copy of ebalzan/ci the runner downloads for
@@ -54,9 +58,9 @@
 #
 # Remote mode. With --repo and no local checkout of that repo, its committed
 # files (.github/actions.env, bootstrap.conf, repo-settings.json, rulesets/)
-# are read from its default branch through the API. Its own secrets files are
-# gitignored and so unknown: only the shared secrets are synced, and secrets
-# are never pruned.
+# are read from its default branch through the API. Its secrets come from
+# repos/<owner>/<repo>/ in the shared secrets dir; without that folder they are
+# unknown, so only the shared secrets are synced and secrets are never pruned.
 #
 # Removing a key from a file does NOT delete it on GitHub — pass --prune, which
 # deletes every variable/secret in a synced scope that no layer defines (after a
@@ -212,6 +216,35 @@ fi
 REPO_GITHUB_DIR="$REPO_DIR/.github"
 OWNER="${REPO%%/*}"
 
+# repo_vault_dir — the repo's folder in the shared secrets dir
+# (repos/<owner>/<repo>/, matched case-insensitively), or nothing.
+repo_vault_dir() {
+  local base="$SHARED_SECRETS_DIR/repos" d want
+  [[ -d "$base" ]] || return 0
+  want="$(printf '%s/' "$REPO" | tr '[:upper:]' '[:lower:]')"
+  for d in "$base"/*/*/; do
+    [[ -d "$d" ]] || continue
+    if [[ "$(printf '%s' "${d#"$base"/}" | tr '[:upper:]' '[:lower:]')" == "$want" ]]; then
+      (cd "$d" && pwd); return 0
+    fi
+  done
+}
+
+# Where the repo's own secrets files live. Its folder in the shared secrets dir
+# wins when it exists: then every repo's secrets sit in one place outside git,
+# and are known even without a checkout (remote mode). Else the checkout's
+# .github/, where they are gitignored.
+REPO_SECRETS_DIR="$(repo_vault_dir)"
+if [[ -n "$REPO_SECRETS_DIR" ]]; then
+  SECRETS_KNOWN=true
+  if ! $REMOTE && compgen -G "$REPO_GITHUB_DIR/secrets*.env" >/dev/null; then
+    warn "Using $REPO_SECRETS_DIR for $REPO's secrets; the secrets*.env files in $REPO_GITHUB_DIR are ignored."
+  fi
+else
+  REPO_SECRETS_DIR="$REPO_GITHUB_DIR"
+  if $REMOTE; then SECRETS_KNOWN=false; else SECRETS_KNOWN=true; fi
+fi
+
 # A private CI repo can only be called by repos of the same account.
 CI_REPO="$(unquote "$(env_get "$REPOS_FILE" CI_REPO)")"
 if ! $DRY_RUN && [[ -n "$CI_REPO" && "${CI_REPO%%/*}" != "$OWNER" ]]; then
@@ -239,7 +272,7 @@ seed_secret_file() {
 environments() {
   local f base
   for f in "$SHARED_SECRETS_DIR"/secrets.*.env "$SHARED_SECRETS_DIR"/secrets.*.env.example \
-           "$REPO_GITHUB_DIR"/secrets.*.env "$REPO_GITHUB_DIR"/secrets.*.env.example; do
+           "$REPO_SECRETS_DIR"/secrets.*.env "$REPO_SECRETS_DIR"/secrets.*.env.example; do
     [[ -e "$f" ]] || continue
     base="$(basename "$f")"; base="${base%.example}"; base="${base#secrets.}"; base="${base%.env}"
     printf '%s\n' "$base"
@@ -256,7 +289,7 @@ merge_layers() {
   local strip="$1" f layer; shift
   for f in "$@"; do
     [[ -n "$f" && -f "$f" ]] || continue
-    if [[ "$f" == "$REPO_GITHUB_DIR"/* ]]; then layer=repo; else layer=shared; fi
+    if [[ "$f" == "$REPO_GITHUB_DIR"/* || "$f" == "$REPO_SECRETS_DIR"/* ]]; then layer=repo; else layer=shared; fi
     clean_env "$f" | awk -v file="$f" -v layer="$layer" -v strip="$strip" '
       { i = index($0, "="); raw = substr($0, 1, i - 1); value = substr($0, i + 1)
         name = raw; if (strip == 1) sub(/_FILE$/, "", name)
@@ -465,7 +498,7 @@ apply_rulesets() {
 # ---- plan --------------------------------------------------------------------
 if ! $DRY_RUN && enabled secrets; then
   seed_secret_file "$SHARED_SECRETS_DIR/secrets.env"
-  $REMOTE || seed_secret_file "$REPO_GITHUB_DIR/secrets.env"
+  [[ "$REPO_SECRETS_DIR" != "$REPO_GITHUB_DIR" ]] || $REMOTE || seed_secret_file "$REPO_GITHUB_DIR/secrets.env"
 fi
 
 # ALL_VARS is the merged view, for the plan and the board check; VARS is the
@@ -474,7 +507,7 @@ ALL_VARS="$(merge_layers 0 "$SHARED_DIR/actions.env" "$REPO_GITHUB_DIR/actions.e
 VARS="$(printf '%s\n' "$ALL_VARS" | awk -F'\t' '$4 != "shared"')"
 RUNTIME_VARS="$(printf '%s\n' "$ALL_VARS" | awk -F'\t' '$4 == "shared" { printf "%s ", $1 }')"
 SECRETS="$(merge_layers 1 "$(secrets_src "$SHARED_SECRETS_DIR/secrets.env")" \
-  "$(secrets_src "$REPO_GITHUB_DIR/secrets.env")" | without_local_only)"
+  "$(secrets_src "$REPO_SECRETS_DIR/secrets.env")" | without_local_only)"
 ENVS="$(environments)"
 SETTINGS_FILE=""
 if enabled settings; then
@@ -487,7 +520,7 @@ enabled rulesets && RULESETS="$(build_rulesets)"
 
 info ""
 info "${BOLD}Bootstrap${RESET}   ${DIM}$REPO  ←  $SOURCE_LABEL${RESET}"
-info "${DIM}shared config: $SHARED_DIR · shared secrets: $SHARED_SECRETS_DIR${SKIP:+ · skipping: $SKIP}${RESET}"
+info "${DIM}shared config: $SHARED_DIR · shared secrets: $SHARED_SECRETS_DIR · repo secrets: $($SECRETS_KNOWN && printf '%s' "$REPO_SECRETS_DIR" || printf 'unknown')${SKIP:+ · skipping: $SKIP}${RESET}"
 info ""
 if enabled vars; then
   printf '%s\n' "$VARS" | grep . | print_plan "repository variables" || true
@@ -497,11 +530,11 @@ if enabled secrets; then
   printf '%s\n' "$SECRETS" | grep . | print_plan "repository secrets" || true
   for env in $ENVS; do
     merge_layers 1 "$(secrets_src "$SHARED_SECRETS_DIR/secrets.$env.env")" \
-      "$(secrets_src "$REPO_GITHUB_DIR/secrets.$env.env")" | without_local_only \
+      "$(secrets_src "$REPO_SECRETS_DIR/secrets.$env.env")" | without_local_only \
       | print_plan "environment '$env' secrets"
   done
   [[ -z "$LOCAL_ONLY_KEYS" ]] || info "  ${DIM}local only, never pushed: $LOCAL_ONLY_KEYS${RESET}"
-  ! $REMOTE || info "  ${DIM}remote mode: the repo's own secrets files are unknown; shared secrets only, never pruned${RESET}"
+  $SECRETS_KNOWN || info "  ${DIM}remote mode, no repos/$REPO/ in the shared secrets dir: the repo's own secrets are unknown; shared secrets only, never pruned${RESET}"
 fi
 if [[ -n "$SETTINGS_FILE" ]]; then
   info "  ${BOLD}repository settings${RESET}"
@@ -518,7 +551,7 @@ info ""
 if $DRY_RUN; then
   if gh auth status >/dev/null 2>&1; then
     if $PRUNE && enabled vars; then prune variable "$(printf '%s\n' "$VARS" | names_of)"; fi
-    if $PRUNE && enabled secrets && ! $REMOTE; then prune secret "$(printf '%s\n' "$SECRETS" | names_of)"; fi
+    if $PRUNE && enabled secrets && $SECRETS_KNOWN; then prune secret "$(printf '%s\n' "$SECRETS" | names_of)"; fi
     [[ -z "$SETTINGS_FILE" ]] || apply_settings "$SETTINGS_FILE"
     if [[ -n "$RULESETS" ]]; then step "Rulesets"; apply_rulesets "$RULESETS"; fi
   fi
@@ -530,7 +563,7 @@ if enabled secrets; then
   printf '%s\n' "$SECRETS" | grep . | check_values || true
   for env in $ENVS; do
     merge_layers 1 "$(secrets_src "$SHARED_SECRETS_DIR/secrets.$env.env")" \
-      "$(secrets_src "$REPO_GITHUB_DIR/secrets.$env.env")" | without_local_only | check_values
+      "$(secrets_src "$REPO_SECRETS_DIR/secrets.$env.env")" | without_local_only | check_values
   done
 fi
 
@@ -547,7 +580,7 @@ fi
 if enabled secrets; then
   printf '%s\n' "$SECRETS" | grep . | set_secrets || true
   if $PRUNE; then
-    if $REMOTE; then
+    if ! $SECRETS_KNOWN; then
       warn "Remote mode: secrets are not pruned (the repo's own secrets files are unknown)."
     else
       prune secret "$(printf '%s\n' "$SECRETS" | names_of)"
@@ -556,12 +589,12 @@ if enabled secrets; then
 
   for env in $ENVS; do
     env_secrets="$(merge_layers 1 "$(secrets_src "$SHARED_SECRETS_DIR/secrets.$env.env")" \
-      "$(secrets_src "$REPO_GITHUB_DIR/secrets.$env.env")" | without_local_only)"
+      "$(secrets_src "$REPO_SECRETS_DIR/secrets.$env.env")" | without_local_only)"
     # Environments are per-repo; a job only sees these secrets when it declares
     # `environment: <name>`. Created idempotently before syncing.
     gh api -X PUT "repos/$REPO/environments/$env" >/dev/null
     printf '%s\n' "$env_secrets" | grep . | set_secrets "$env" || true
-    if $PRUNE && ! $REMOTE; then prune secret "$(printf '%s\n' "$env_secrets" | names_of)" "$env"; fi
+    if $PRUNE && $SECRETS_KNOWN; then prune secret "$(printf '%s\n' "$env_secrets" | names_of)" "$env"; fi
   done
 fi
 

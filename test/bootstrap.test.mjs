@@ -94,3 +94,41 @@ test('not a checkout and no --repo is an error', t => {
   const result = runCli(['bootstrap', '-C', join(dir), '--dry-run'], { env })
   assert.equal(result.status, 1)
 })
+
+test(
+  'repo secrets come from repos/<owner>/<repo>/ in the shared secrets dir when it exists',
+  { skip: !hasGh && 'gh not installed' },
+  t => {
+    const secretsDir = tempDir(t)
+    writeFile(secretsDir, 'secrets.env', 'ANTHROPIC_API_KEY=shared\n')
+    // Matched case-insensitively against the slug.
+    writeFile(
+      secretsDir,
+      'repos/Someone/Example/secrets.env',
+      'ANTHROPIC_API_KEY=mine\nONLY_IN_VAULT=1\n',
+    )
+    writeFile(secretsDir, 'repos/Someone/Example/secrets.production.env', 'DEPLOY_KEY=k\n')
+    const result = dryRun(t, { '.github/secrets.env': 'IGNORED_CHECKOUT_KEY=x\n' }, [], {
+      CI_SECRETS_DIR: secretsDir,
+    })
+    assert.equal(result.status, 0, result.stderr + result.stdout)
+    const out = result.stdout + result.stderr
+    assert.match(out, /repo secrets: .*repos\/Someone\/Example/)
+    assert.match(out, /secrets\*\.env files in .* are ignored/)
+    assert.match(result.stdout, /ANTHROPIC_API_KEY +repo \(overrides shared\)/)
+    assert.match(result.stdout, /ONLY_IN_VAULT +repo/)
+    assert.match(result.stdout, /environment 'production' secrets\n +DEPLOY_KEY +repo/)
+    assert.doesNotMatch(result.stdout, /IGNORED_CHECKOUT_KEY/)
+  },
+)
+
+test(
+  "without that folder, the checkout's .github/ holds the repo secrets",
+  { skip: !hasGh && 'gh not installed' },
+  t => {
+    const result = dryRun(t, { '.github/secrets.env': 'CHECKOUT_KEY=x\n' })
+    assert.equal(result.status, 0, result.stderr + result.stdout)
+    assert.match(result.stdout, /repo secrets: .*\/\.github/)
+    assert.match(result.stdout, /CHECKOUT_KEY +repo/)
+  },
+)

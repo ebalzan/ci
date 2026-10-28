@@ -64,6 +64,11 @@ GH_PROJECT_TOKEN=ghp_...
 EOF
 ```
 
+A repo's **own** secrets (deploy credentials, …) go in the same folder, under
+`repos/<owner>/<repo>/` — e.g. `repos/me/my-api/secrets.production.env` for its
+`production` environment. Then `bootstrap --all` works with no checkouts
+([ARCHITECTURE §7](docs/ARCHITECTURE.md#7-where-you-run-commands)).
+
 **2. Onboard a repo**, from its checkout:
 
 ```bash
@@ -73,8 +78,10 @@ npx @ebalzan/ci onboard             # do it
 ```
 
 That creates a `ci/onboard-ebalzan-ci` branch with the four workflow callers, a
-starter `.github/actions.env`, `renovate.json` and (for Node repos) the husky
-`commit-msg` hook; creates `dev` if missing; tags the repo `ebalzan-ci`; applies
+starter `.github/actions.env`, `renovate.json`, the `.gitignore` lines for
+secrets files and, for Node repos, the husky `commit-msg` hook and the
+[`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config) Prettier and
+ESLint wiring; creates `dev` if missing; tags the repo `ebalzan-ci`; applies
 the variables, secrets, settings and rulesets; and pushes. The new
 `auto-pr.yml` opens the PR into `dev` on that very push.
 
@@ -96,16 +103,17 @@ Full walkthrough and the manual alternative: [docs/ONBOARDING.md](docs/ONBOARDIN
 
 ## What every repo gets
 
-| Rule                  | What it means                                                                                                                                                                  | Details                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| Branch model          | Work branches `<type>/<desc>` → `dev` (integration) → `main` (releases). Only the automated promotion PR merges into `main`.                                                   | [CI_FLOW](docs/CI_FLOW.md)                                     |
-| Commit convention     | Conventional Commits with the types `feat fix docs style refact perf test build ci chore revert`. Checked locally by the hook and on every PR title.                           | [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                           |
-| Branch ↔ title match | A `feat/` branch needs a `feat:` title (minor), any other type a patch-level title, unless it is marked breaking (`!`).                                                        | [CI_FLOW §3](docs/CI_FLOW.md#stage-2--pr-checks)               |
-| Work items            | Every pushed work branch gets a tracking issue and a PR into `dev`, labelled, assigned, optionally on a milestone and a Projects (v2) board with priority/size/estimate/dates. | [AUTO_WORK_ITEMS](docs/AUTO_WORK_ITEMS_WORKFLOW.md)            |
-| Releases              | Every push to `main` is a release: semver bump from the commits since the last tag, `vX.Y.Z` tag, GitHub Release, `package.json` bumped if there is one (tag-only otherwise).  | [CI_FLOW §4](docs/CI_FLOW.md#4-version-bump-rules-commit-scan) |
-| Repo settings         | Squash-merge only, squash commit titled from the PR title, branches deleted after merge.                                                                                       | [REPO_RULES](docs/REPO_RULES.md)                               |
-| Branch rulesets       | `main` cannot be deleted or force-pushed; `dev` cannot be deleted; an opt-in rule requires PRs + the title check.                                                              | [REPO_RULES](docs/REPO_RULES.md)                               |
-| Dev tooling versions  | A Renovate preset keeps Prettier, ESLint, husky, lint-staged and TypeScript on the same versions everywhere — one grouped PR a week, nothing else touched.                     | [renovate/tooling.json](renovate/tooling.json)                 |
+| Rule                 | What it means                                                                                                                                                                        | Details                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Branch model         | Work branches `<type>/<desc>` → `dev` (integration) → `main` (releases). Only the automated promotion PR merges into `main`.                                                         | [CI_FLOW](docs/CI_FLOW.md)                                                               |
+| Commit convention    | Conventional Commits with the types `feat fix docs style refact perf test build ci chore revert`. Checked locally by the hook and on every PR title.                                 | [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                                                     |
+| Branch ↔ title match | A `feat/` branch needs a `feat:` title (minor), any other type a patch-level title, unless it is marked breaking (`!`).                                                              | [CI_FLOW §3](docs/CI_FLOW.md#stage-2--pr-checks)                                         |
+| Work items           | Every pushed work branch gets a tracking issue and a PR into `dev`, labelled, assigned, optionally on a milestone and a Projects (v2) board with priority/size/estimate/dates.       | [AUTO_WORK_ITEMS](docs/AUTO_WORK_ITEMS_WORKFLOW.md)                                      |
+| Releases             | Every push to `main` is a release: semver bump from the commits since the last tag, `vX.Y.Z` tag, GitHub Release, `package.json` bumped if there is one (tag-only otherwise).        | [CI_FLOW §4](docs/CI_FLOW.md#4-version-bump-rules-commit-scan)                           |
+| Repo settings        | Squash-merge only, squash commit titled from the PR title, branches deleted after merge.                                                                                             | [REPO_RULES](docs/REPO_RULES.md)                                                         |
+| Branch rulesets      | `main` cannot be deleted or force-pushed; `dev` cannot be deleted; an opt-in rule requires PRs + the title check.                                                                    | [REPO_RULES](docs/REPO_RULES.md)                                                         |
+| Code style (Node)    | Prettier, ESLint and TypeScript rules from [`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config), extended — not copied — by each repo.                                 | [ARCHITECTURE §10](docs/ARCHITECTURE.md#10-the-two-packages-ebalzanci-and-ebalzanconfig) |
+| Dev tooling versions | A Renovate preset keeps Prettier, ESLint, husky, lint-staged, TypeScript and both `@ebalzan` packages on the same versions everywhere — one grouped PR a week, nothing else touched. | [renovate/tooling.json](renovate/tooling.json)                                           |
 
 Every rule can be overridden per repo, in that repo — see
 [Configuration](#configuration-in-one-minute).
@@ -202,10 +210,11 @@ Every command has `--help`, and `bootstrap`, `reset` and `onboard` have
 Everything is a file, merged in two layers — **the repo's value always wins**:
 
 ```text
-                     shared (this package)              repo (its own .github/)
+                     shared (this package)              repo
 Actions variables    config/actions.env              +  .github/actions.env
-repository secrets   ~/.config/ebalzan-ci/secrets.env +  .github/secrets.env          (gitignored)
-environment secrets  …/secrets.<env>.env              +  .github/secrets.<env>.env    (gitignored)
+repository secrets   ~/.config/ebalzan-ci/secrets.env +  ~/.config/ebalzan-ci/repos/<owner>/<repo>/secrets.env
+environment secrets  …/secrets.<env>.env              +  …/repos/<owner>/<repo>/secrets.<env>.env
+                                                         (or the repo's gitignored .github/secrets*.env)
 repo settings        config/repo-settings.json        +  .github/repo-settings.json   (deep merge)
 branch rulesets      config/rulesets/<name>.json      +  .github/rulesets/<name>.json (deep merge)
 ```
