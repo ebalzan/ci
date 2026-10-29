@@ -36,7 +36,7 @@ Node.js ≥ 24 for development (the published CLI needs ≥ 22.12), bash, git, a
   release.yml               reusable  semver bump, tag, GitHub Release, sync dev; outputs tag/sha
   self-*.yml                this repo's own flow: callers of the four above, by local path
 actions/                    composite actions the reusable workflows run
-  auto-pr/                  gh + Claude Code (headless), all in action.yml
+  auto-pr/                  gh + Claude Code (headless): action.yml + a script per step
   work-pr/                  rules.mjs (the rules) + dangerfile.mjs (Danger entry) + its own lockfile
   promote/  release/
 scripts/shared-vars.mjs     AUTO_* loading: repo variables, then config/actions.env
