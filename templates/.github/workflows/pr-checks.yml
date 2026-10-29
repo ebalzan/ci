@@ -1,12 +1,16 @@
 # =============================================================================
 # PR Checks — the quality gate for every PR into dev or main.
 #
-#   work-pr   The shared work-PR check (__CI_REPO__) for feat/fix/… PRs into
-#             dev: Conventional title and commits, then the PR's data — branch,
-#             title type, type label, assignee, author, milestone, board,
-#             description. Skipped for drafts and for the dev → main release
-#             PR. Keep the job id `work-pr`: the check is reported as
-#             `work-pr / Work PR`, the name the shared rulesets require.
+#   pr-check  The shared PR check (__CI_REPO__), one job per PR kind:
+#             `Work PR` for feat/fix/… PRs into dev — Conventional title and
+#             commits, then the PR's data: branch, title type, type label,
+#             assignee, author, milestone, board, description. `Release PR`
+#             for the dev → main PR — the same commitlint steps, the computed
+#             `<type>[!]: release vX.Y.Z` title, the `release` label, assignee,
+#             milestone, board, description. The other job is skipped, as are
+#             drafts. Keep the job id `pr-check`: the checks are reported as
+#             `pr-check / Work PR` and `pr-check / Release PR`, the names the
+#             shared rulesets require.
 #
 # The PR's metadata is part of the check, so it also re-runs when the title,
 # description, labels, milestone or assignees change.
@@ -40,8 +44,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  work-pr:
-    uses: __CI_REPO__/.github/workflows/work-pr.yml@__CI_REF__
+  pr-check:
+    uses: __CI_REPO__/.github/workflows/pr-check.yml@__CI_REF__
     with:
       runs-on: __RUNS_ON__
     secrets:

@@ -1,2 +1,5 @@
 # Generated: the lockfiles.
 package-lock.json
+
+# Claude prompts: Prettier would read the __PLACEHOLDERS__ as bold.
+actions/*/*-prompt.md

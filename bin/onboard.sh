@@ -5,9 +5,10 @@
 # In the repo's checkout it:
 #   1. creates a branch (ci/onboard-ebalzan-ci) from dev — or from the default
 #      branch when dev does not exist yet;
-#   2. writes the templates/ files: the four thin workflow callers, a starter
+#   2. writes the templates/ files: the two thin workflow callers, a starter
 #      .github/actions.env, renovate.json and, for a Node repo, the husky
 #      commit-msg hook. A file that already exists is kept (--force replaces it);
+#      a caller an older version wrote and this one replaced is removed;
 #   3. adds the .github/secrets*.env files to .gitignore when they are not
 #      ignored yet (before any secret file exists);
 #   4. for a Node repo (package.json): installs this package and husky as
@@ -195,6 +196,13 @@ while IFS= read -r rel; do
   fi
 done < <(cd "$TEMPLATES_DIR" && find . -type f | sed 's#^\./##' | sort)
 
+# Callers an older version wrote that this one replaced: left in place, they
+# would fight the new ones over the same PR.
+OBSOLETE=(.github/workflows/promote-dev-to-main.yml)
+for rel in "${OBSOLETE[@]}"; do
+  [[ ! -e "$REPO_DIR/$rel" ]] || PLAN+=("remove	$rel	replaced by the release PR of auto-pr.yml")
+done
+
 info ""
 info "${BOLD}Onboard${RESET}   ${DIM}${REPO:-$(basename "$REPO_DIR")}  ←  $CI_REPO@$REF (runs-on: $RUNS_ON)${RESET}"
 info ""
@@ -203,6 +211,7 @@ for entry in "${PLAN[@]}"; do
   IFS='	' read -r action rel reason <<< "$entry"
   case "$action" in
     create|overwrite) printf '    %-10s %s\n' "$action" "$rel" ;;
+    remove)           printf '    %-10s %s (%s)\n' remove "$rel" "$reason" ;;
     keep)             printf '    %s%-10s %s (exists — --force replaces it)%s\n' "$DIM" keep "$rel" "$RESET" ;;
     skip)             printf '    %s%-10s %s (%s)%s\n' "$DIM" skip "$rel" "$reason" "$RESET" ;;
   esac
@@ -248,7 +257,10 @@ render() { # render REL — template → repo, placeholders filled in
 
 for entry in "${PLAN[@]}"; do
   IFS='	' read -r action rel reason <<< "$entry"
-  case "$action" in create|overwrite) render "$rel"; ok "$action $rel" ;; esac
+  case "$action" in
+    create|overwrite) render "$rel"; ok "$action $rel" ;;
+    remove)           rm -f "$REPO_DIR/$rel"; ok "remove $rel" ;;
+  esac
 done
 
 if $GITIGNORE; then
@@ -334,7 +346,7 @@ info ""
 ok "${BOLD}$REPO is onboarded.${RESET}"
 info "  1. The PR into dev opens within a minute (auto-pr.yml). If it does not:"
 info "     https://github.com/$REPO/compare/dev...$BRANCH"
-info "  2. Add the repo's own checks to .github/workflows/pr-checks.yml and its"
-info "     ship job to release.yml (both have a commented example)."
+info "  2. Add the repo's own checks to .github/workflows/pr-checks.yml (it has a"
+info "     commented example)."
 [[ -z "$TSCONFIG_NOTE" ]] || info "  ·  $TSCONFIG_NOTE"
-info "  3. Squash-merge the PR, then the dev → main PR: the first release."
+info "  3. Squash-merge the PR: the dev → main release PR opens."

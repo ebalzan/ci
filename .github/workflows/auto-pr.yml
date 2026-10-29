@@ -1,11 +1,16 @@
 # =============================================================================
-# Auto PR (reusable) — the PR of every work branch, opened on its first push.
+# Auto PR (reusable) — the PR of every work branch, and the release PR of dev.
 #
-# The caller triggers this on every push to a non-main/non-dev branch. It opens
-# (or updates) the branch's PR into dev, as a draft until its type label,
-# assignee, milestone, board card and AI description are in place
-# (actions/auto-pr). No issue is created. Purely dev-side tooling: it never
-# touches builds, releases, or deployments.
+# The caller triggers this on every push to a branch other than main
+# (actions/auto-pr):
+#   - a work branch: opens (or updates) its PR into dev, as a draft until its
+#     type label, assignee, milestone, board card and AI description are in
+#     place. No issue is created.
+#   - dev: opens (or updates) THE release PR, dev → main, titled after the
+#     release merging it cuts (`feat: release v1.4.0`), with the `release`
+#     label, the same assignee/milestone/board, and an AI summary above the
+#     git-cliff changelog.
+# It never builds, releases or deploys anything itself.
 #
 # The CALLER repo's variables (`vars`, in a reusable workflow) are passed whole
 # as REPO_VARS_JSON; the action takes their AUTO_* keys. Any knob the repo
@@ -21,7 +26,7 @@
 #                       events trigger PR Checks, and reaches a board owned by a
 #                       personal account (a fine-grained PAT cannot). Falls back
 #                       to GITHUB_TOKEN: no board, and PR Checks wait for the
-#                       next push.
+#                       next push (the release PR: until someone pushes to it).
 #
 # Renovate's branches (chore/renovate-*) are skipped: Renovate opens and
 # rewrites its own PR.
@@ -38,9 +43,13 @@ on:
         type: string
         default: ubuntu-latest
       base-branch:
-        description: Branch the work PR targets.
+        description: Branch work PRs target; a push to it updates the release PR.
         type: string
         default: dev
+      release-branch:
+        description: Branch the release PR targets.
+        type: string
+        default: main
     secrets:
       ANTHROPIC_API_KEY:
         required: false
@@ -63,8 +72,10 @@ jobs:
       cancel-in-progress: false
     env:
       AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      AUTO_RELEASE_BRANCH: ${{ inputs.release-branch }}
       REPO_VARS_JSON: ${{ toJSON(vars) }}
     steps:
+      # Full history with the tags: the release PR's version comes from them.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

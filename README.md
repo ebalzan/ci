@@ -13,20 +13,23 @@ It has three parts:
 
 | Part                                         | What it is                                                                                                                                                                                     |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Reusable workflows** (`.github/workflows`) | Called by four thin files in each repo: auto issue + PR per branch, PR-title check, the evergreen `dev → main` PR, and the release (bump, tag, GitHub Release).                                |
+| **Reusable workflows** (`.github/workflows`) | Called by two thin files in each repo: the auto PR (a PR per work branch, and the `dev → main` release PR) and the PR check.                                                                   |
 | **CLI** (`npx @ebalzan/ci`)                  | `onboard` a repo in one command; `bootstrap` its Actions variables, secrets, settings and rulesets from shared + per-repo files (one repo or `--all`); validate commit messages in a git hook. |
 | **Shared config** (`config/`)                | The house rules: shared Actions variables, repository settings, branch rulesets — each overridable per repo.                                                                                   |
 
 ```text
-  feat/login ── push ──▶ issue + PR into dev          (auto-work-items)
-                          │  PR title checked          (pr-title)
+  feat/login ── push ──▶ work PR into dev             (auto-pr)
+                          │  work PR checked           (pr-check)
                           ▼  squash-merge
-                         dev ──▶ one dev → main PR     (promote-dev-to-main)
-                          │       "feat: promote dev to main (v1.4.0)"
-                          ▼  squash-merge = release approval
-                         main ──▶ v1.4.0 tag + GitHub Release, dev synced   (release)
-                                   └─▶ your own deploy job, chained on the tag
+                         dev ──▶ release PR into main (auto-pr)
+                          │       "feat: release v1.4.0" + changelog
+                          │  release PR checked        (pr-check)
+                          ▼  squash-merge (by hand) = release approval
+                         main
 ```
+
+Tagging the release, the GitHub Release and deploys are not shared stages yet
+([CI_FLOW](docs/CI_FLOW.md)).
 
 ---
 
@@ -77,7 +80,7 @@ npx @ebalzan/ci onboard --dry-run   # see exactly what it will do
 npx @ebalzan/ci onboard             # do it
 ```
 
-That creates a `ci/onboard-ebalzan-ci` branch with the four workflow callers, a
+That creates a `ci/onboard-ebalzan-ci` branch with the two workflow callers, a
 starter `.github/actions.env`, `renovate.json`, the `.gitignore` lines for
 secrets files and, for Node repos, the husky `commit-msg` hook and the
 [`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config) Prettier and
@@ -85,8 +88,8 @@ ESLint wiring; creates `dev` if missing; tags the repo `ebalzan-ci`; applies
 the variables, secrets, settings and rulesets; and pushes. The new
 `auto-pr.yml` opens the PR into `dev` on that very push.
 
-**3. Merge it** (squash), then merge the `dev → main` PR that appears: that is
-the repo's first release.
+**3. Merge it** (squash): the `dev → main` release PR appears, titled with the
+repo's first version.
 
 From then on, the flow is just:
 
@@ -94,7 +97,7 @@ From then on, the flow is just:
 git switch dev && git pull
 git switch -c feat/search-filters
 git commit -m "feat(search): add filters"      # the hook checks the format
-git push -u origin feat/search-filters         # issue + PR into dev appear
+git push -u origin feat/search-filters         # the PR into dev appears
 ```
 
 Full walkthrough and the manual alternative: [docs/ONBOARDING.md](docs/ONBOARDING.md).
@@ -105,22 +108,22 @@ Full walkthrough and the manual alternative: [docs/ONBOARDING.md](docs/ONBOARDIN
 
 | Rule                 | What it means                                                                                                                                                                        | Details                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Branch model         | Work branches `<type>/<desc>` → `dev` (integration) → `main` (releases). Only the automated promotion PR merges into `main`.                                                         | [CI_FLOW](docs/CI_FLOW.md)                                                               |
+| Branch model         | Work branches `<type>/<desc>` → `dev` (integration) → `main` (releases). Only the automated release PR merges into `main`.                                                           | [CI_FLOW](docs/CI_FLOW.md)                                                               |
 | Commit convention    | Conventional Commits with the types `feat fix docs style refact perf test build ci chore revert`. Checked locally by the hook and on every PR title.                                 | [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                                                     |
 | Branch ↔ title match | A `feat/` branch needs a `feat:` title (minor), any other type a patch-level title, unless it is marked breaking (`!`).                                                              | [CI_FLOW §3](docs/CI_FLOW.md#stage-2--pr-checks)                                         |
-| Work items           | Every pushed work branch gets a tracking issue and a PR into `dev`, labelled, assigned, optionally on a milestone and a Projects (v2) board with priority/size/estimate/dates.       | [AUTO_WORK_ITEMS](docs/AUTO_WORK_ITEMS_WORKFLOW.md)                                      |
-| Releases             | Every push to `main` is a release: semver bump from the commits since the last tag, `vX.Y.Z` tag, GitHub Release, `package.json` bumped if there is one (tag-only otherwise).        | [CI_FLOW §4](docs/CI_FLOW.md#4-version-bump-rules-commit-scan)                           |
+| Auto PRs             | Every pushed work branch gets a PR into `dev`, and every push to `dev` updates the release PR into `main`: labelled, assigned, optionally on a milestone and a board, AI-described.  | [CI_FLOW §3](docs/CI_FLOW.md#3-stage-by-stage)                                           |
+| Release PR           | Its title is the next semver, from the commits since the last `vX.Y.Z` tag (`feat: release v1.4.0`); its description, the changelog. Merging it into `main` approves the release.    | [CI_FLOW §4](docs/CI_FLOW.md#4-version-bump-rules-commit-scan)                           |
 | Repo settings        | Squash-merge only, squash commit titled from the PR title, branches deleted after merge.                                                                                             | [REPO_RULES](docs/REPO_RULES.md)                                                         |
-| Branch rulesets      | `main` cannot be deleted or force-pushed; `dev` cannot be deleted; an opt-in rule requires PRs + the title check.                                                                    | [REPO_RULES](docs/REPO_RULES.md)                                                         |
+| Branch rulesets      | `main` cannot be deleted or force-pushed; `dev` cannot be deleted; an opt-in rule requires PRs + the PR checks.                                                                      | [REPO_RULES](docs/REPO_RULES.md)                                                         |
 | Code style (Node)    | Prettier, ESLint and TypeScript rules from [`@ebalzan/config`](https://www.npmjs.com/package/@ebalzan/config), extended — not copied — by each repo.                                 | [ARCHITECTURE §10](docs/ARCHITECTURE.md#10-the-two-packages-ebalzanci-and-ebalzanconfig) |
 | Dev tooling versions | A Renovate preset keeps Prettier, ESLint, husky, lint-staged, TypeScript and both `@ebalzan` packages on the same versions everywhere — one grouped PR a week, nothing else touched. | [renovate/tooling.json](renovate/tooling.json)                                           |
 
 Every rule can be overridden per repo, in that repo — see
 [Configuration](#configuration-in-one-minute).
 
-**What stays in each repo:** the four small caller files (two identical
-everywhere, two with the repo's own jobs added), its build/test jobs, its
-deploy, and its own variables and secrets. Which file is which, what runs
+**What stays in each repo:** the two small caller files (`auto-pr.yml`
+identical everywhere, `pr-checks.yml` with the repo's own jobs added), its
+build/test jobs, its deploy, and its own variables and secrets. Which file is which, what runs
 where, and how to structure a deploy: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
@@ -128,60 +131,38 @@ where, and how to structure a deploy: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.m
 ## Using the workflows by hand
 
 `onboard` writes these for you ([templates/](templates/)), but nothing more is
-needed than four small files. Each holds only what a reusable workflow cannot:
+needed than two small files. Each holds only what a reusable workflow cannot:
 the trigger, the permissions and the secrets.
 
 ```yaml
-# .github/workflows/auto-pr.yml
-name: Auto Create Work Items
+# .github/workflows/auto-pr.yml — work PRs, and the release PR on pushes to dev
+name: Auto PR
 on:
   push:
-    branches-ignore: [main, dev]
+    branches-ignore: [main]
     tags-ignore: ['**']
+  workflow_dispatch: {}
 permissions:
   contents: read
-  issues: write
   pull-requests: write
-  repository-projects: write
 jobs:
-  work-items:
-    uses: ebalzan/ci/.github/workflows/auto-work-items.yml@v2
+  auto-pr:
+    uses: ebalzan/ci/.github/workflows/auto-pr.yml@v4
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GH_PROJECT_TOKEN: ${{ secrets.GH_PROJECT_TOKEN }}
 ```
 
-```yaml
-# .github/workflows/release.yml — with a deploy chained on the new tag
-name: Release
-on:
-  push:
-    branches: [main]
-permissions:
-  contents: write
-  pull-requests: read
-jobs:
-  release:
-    uses: ebalzan/ci/.github/workflows/release.yml@v2
-  deploy:
-    needs: release
-    if: ${{ needs.release.outputs.tag != '' }}
-    uses: ./.github/workflows/deploy.yml
-    with:
-      image_tag: ${{ needs.release.outputs.tag }}
-```
-
-| Reusable workflow         | Inputs (all optional)                                     | Secrets                                 | Caller must grant                                                                       |
-| ------------------------- | --------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------- |
-| `auto-work-items.yml`     | `runs-on` (`ubuntu-latest`), `base-branch` (`dev`)        | `ANTHROPIC_API_KEY`, `GH_PROJECT_TOKEN` | `contents: read`, `issues: write`, `pull-requests: write`, `repository-projects: write` |
-| `pr-title.yml`            | `runs-on`                                                 | —                                       | `contents: read`                                                                        |
-| `promote-dev-to-main.yml` | `runs-on`                                                 | `GH_PROJECT_TOKEN`                      | `contents: read`, `issues: write`, `pull-requests: write`                               |
-| `release.yml`             | `runs-on`, `sync-dev` (`true`) · **outputs** `tag`, `sha` | —                                       | `contents: write`, `pull-requests: read`                                                |
+| Reusable workflow | Inputs (all optional)                                                         | Secrets                                 | Caller must grant                        |
+| ----------------- | ----------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------- |
+| `auto-pr.yml`     | `runs-on` (`ubuntu-latest`), `base-branch` (`dev`), `release-branch` (`main`) | `ANTHROPIC_API_KEY`, `GH_PROJECT_TOKEN` | `contents: read`, `pull-requests: write` |
+| `pr-check.yml`    | `runs-on`, `base-branch` (`dev`), `release-branch` (`main`)                   | `GH_PROJECT_TOKEN`                      | `contents: read`, `pull-requests: write` |
 
 Secrets are passed by name: `secrets: inherit` is only guaranteed within one
 organization. Variables need no passing — inside a reusable workflow, `vars` are
-the **caller's**. Call `pr-title.yml` from a job named `title` so the check is
-reported as `title / Validate PR Title`, the name the rulesets require.
+the **caller's**. Call `pr-check.yml` from a job named `pr-check` so the checks
+are reported as `pr-check / Work PR` and `pr-check / Release PR`, the names the
+rulesets require.
 
 ---
 
@@ -267,26 +248,27 @@ Upgrading from the private `tracebim-ci` v1: [docs/MIGRATION.md](docs/MIGRATION.
   (`GH_PROJECT_TOKEN`); fine-grained tokens cannot reach them.
 - **The CLI needs bash** (Linux, macOS, WSL, Git Bash). The `commit-msg` command
   needs a POSIX `sh`.
-- The work-item descriptions are written by Claude (Anthropic API) when
-  `ANTHROPIC_API_KEY` is set; without it a plain template is used.
+- The PR descriptions are written by Claude (Anthropic API) when
+  `ANTHROPIC_API_KEY` is set; without it a work PR keeps its commit list and the
+  release PR its changelog.
 
 ---
 
 ## Documentation
 
-| Doc                                                          | Covers                                                                         |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| [ARCHITECTURE](docs/ARCHITECTURE.md)                         | What is shared vs repo-specific, what runs where, deploys, design decisions    |
-| [ONBOARDING](docs/ONBOARDING.md)                             | Adding a repo with `onboard`, or by hand; what each generated file is for      |
-| [CI_FLOW](docs/CI_FLOW.md)                                   | Branch → `dev` → `main` → release, stage by stage; bump rules; troubleshooting |
-| [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                         | Commit types, PR titles, versioning, for people writing commits                |
-| [AUTO_WORK_ITEMS_WORKFLOW](docs/AUTO_WORK_ITEMS_WORKFLOW.md) | The issue / PR / board automation in detail                                    |
-| [CONFIGURATION](docs/CONFIGURATION.md)                       | Every variable, secret and config file, with defaults                          |
-| [GITHUB_ACTIONS_SETUP](docs/GITHUB_ACTIONS_SETUP.md)         | Where a value belongs (variable/secret, repo/environment) and why              |
-| [REPO_RULES](docs/REPO_RULES.md)                             | Repository settings and branch rulesets                                        |
-| [CLI](docs/CLI.md)                                           | Every command and option                                                       |
-| [MIGRATION](docs/MIGRATION.md)                               | From `ebalzan/tracebim-ci` v1 to `ebalzan/ci` v2                               |
-| [CONTRIBUTING](CONTRIBUTING.md)                              | Working on this repo: layout, tests, releasing, publishing to npm              |
+| Doc                                                          | Covers                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| [ARCHITECTURE](docs/ARCHITECTURE.md)                         | What is shared vs repo-specific, what runs where, deploys, design decisions |
+| [ONBOARDING](docs/ONBOARDING.md)                             | Adding a repo with `onboard`, or by hand; what each generated file is for   |
+| [CI_FLOW](docs/CI_FLOW.md)                                   | Branch → `dev` → `main`, stage by stage; bump rules; troubleshooting        |
+| [COMMIT_GUIDE](docs/COMMIT_GUIDE.md)                         | Commit types, PR titles, versioning, for people writing commits             |
+| [AUTO_WORK_ITEMS_WORKFLOW](docs/AUTO_WORK_ITEMS_WORKFLOW.md) | The issue / PR / board automation in detail                                 |
+| [CONFIGURATION](docs/CONFIGURATION.md)                       | Every variable, secret and config file, with defaults                       |
+| [GITHUB_ACTIONS_SETUP](docs/GITHUB_ACTIONS_SETUP.md)         | Where a value belongs (variable/secret, repo/environment) and why           |
+| [REPO_RULES](docs/REPO_RULES.md)                             | Repository settings and branch rulesets                                     |
+| [CLI](docs/CLI.md)                                           | Every command and option                                                    |
+| [MIGRATION](docs/MIGRATION.md)                               | From `ebalzan/tracebim-ci` v1 to `ebalzan/ci` v2                            |
+| [CONTRIBUTING](CONTRIBUTING.md)                              | Working on this repo: layout, tests, releasing, publishing to npm           |
 
 ---
 

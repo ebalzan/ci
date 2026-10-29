@@ -53,13 +53,13 @@ only `AUTO_*` keys are read.
 
 ### Project board
 
-| Variable                       | Default          | Read by             | Meaning                                                                                                                               |
-| ------------------------------ | ---------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTO_PROJECT_NUMBER`          | unset → no board | work items, promote | Projects (v2) board number (the `N` in `/users/me/projects/N`). One board per repo is typical.                                        |
-| `AUTO_PROJECT_OWNER`           | the repo owner   | work items, promote | Account or organization owning the board.                                                                                             |
-| `AUTO_STRICT_METADATA`         | `true`           | work items          | With a board configured: fail the run when the board, a field or an option is missing. `false` only warns. No effect without a board. |
-| `AUTO_START_DATE_OFFSET_DAYS`  | `0`              | work items          | `Start date` = today + N days.                                                                                                        |
-| `AUTO_TARGET_DATE_OFFSET_DAYS` | `7`              | work items          | `Target date` = today + N days.                                                                                                       |
+| Variable                       | Default          | Read by           | Meaning                                                                                                                               |
+| ------------------------------ | ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTO_PROJECT_NUMBER`          | unset → no board | auto PR, PR check | Projects (v2) board number (the `N` in `/users/me/projects/N`). One board per repo is typical.                                        |
+| `AUTO_PROJECT_OWNER`           | the repo owner   | auto PR, PR check | Account or organization owning the board.                                                                                             |
+| `AUTO_STRICT_METADATA`         | `true`           | work items        | With a board configured: fail the run when the board, a field or an option is missing. `false` only warns. No effect without a board. |
+| `AUTO_START_DATE_OFFSET_DAYS`  | `0`              | work items        | `Start date` = today + N days.                                                                                                        |
+| `AUTO_TARGET_DATE_OFFSET_DAYS` | `7`              | work items        | `Target date` = today + N days.                                                                                                       |
 
 The board needs the fields `Start date`, `Target date`, `Priority`
 (single-select with options `P0`…`P4`), `Estimate` and `Size` (looked up by
@@ -78,12 +78,12 @@ name, case-insensitive). See [AUTO_WORK_ITEMS_WORKFLOW.md](AUTO_WORK_ITEMS_WORKF
 
 ### Labels and milestone
 
-| Variable                | Default | Meaning                                                                                                |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
-| `AUTO_ISSUE_LABELS`     | unset   | Extra labels for every tracking issue (comma-separated). Type labels are reserved and filtered out.    |
-| `AUTO_PR_LABELS`        | unset   | Extra labels for every work PR.                                                                        |
-| `AUTO_MILESTONE_TITLE`  | unset   | Milestone (exact title, case-insensitive) put on work issues/PRs and the promotion PR.                 |
-| `AUTO_MILESTONE_NUMBER` | unset   | Milestone by number; takes precedence over the title for work items (the promotion PR uses the title). |
+| Variable                | Default | Meaning                                                                                              |
+| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `AUTO_ISSUE_LABELS`     | unset   | Extra labels for every tracking issue (comma-separated). Type labels are reserved and filtered out.  |
+| `AUTO_PR_LABELS`        | unset   | Extra labels for every work PR.                                                                      |
+| `AUTO_MILESTONE_TITLE`  | unset   | Milestone (exact title, case-insensitive) put on work issues/PRs and the release PR.                 |
+| `AUTO_MILESTONE_NUMBER` | unset   | Milestone by number; takes precedence over the title for work items (the release PR uses the title). |
 
 ### Descriptions
 
@@ -104,10 +104,10 @@ Needs the `ANTHROPIC_API_KEY` secret; without it the body is a fixed template.
 
 ## Secrets
 
-| Secret              | Needed by           | Required?   | What                                                                                                                                                                                                                                       |
-| ------------------- | ------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GH_PROJECT_TOKEN`  | work items, promote | recommended | **Classic** PAT, scopes `repo` + `project`. Lets the bots write to Projects (v2) boards and makes the PRs they open trigger PR Checks. Falls back to `GITHUB_TOKEN` (no board writes; bot PRs do not start checks until you push to them). |
-| `ANTHROPIC_API_KEY` | work items          | optional    | Writes the issue/PR descriptions. <https://console.anthropic.com/settings/keys>                                                                                                                                                            |
+| Secret              | Needed by         | Required?   | What                                                                                                                                                                                                                                       |
+| ------------------- | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GH_PROJECT_TOKEN`  | auto PR, PR check | recommended | **Classic** PAT, scopes `repo` + `project`. Lets the bots write to Projects (v2) boards and makes the PRs they open trigger PR Checks. Falls back to `GITHUB_TOKEN` (no board writes; bot PRs do not start checks until you push to them). |
+| `ANTHROPIC_API_KEY` | work items        | optional    | Writes the issue/PR descriptions. <https://console.anthropic.com/settings/keys>                                                                                                                                                            |
 
 `GITHUB_TOKEN` is provided by Actions; never set it. Secrets are passed by name
 in the caller (`secrets: inherit` is only guaranteed within one organization).
@@ -124,14 +124,11 @@ the expiry short. Details: [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md#fil
 Set in the caller's `with:`. Everything else is a variable, so callers stay
 four lines long.
 
-| Workflow              | Input         | Default         | Meaning                                                                                |
-| --------------------- | ------------- | --------------- | -------------------------------------------------------------------------------------- |
-| all four              | `runs-on`     | `ubuntu-latest` | Runner label (e.g. `self-hosted`).                                                     |
-| `auto-work-items.yml` | `base-branch` | `dev`           | Branch the work PRs target.                                                            |
-| `release.yml`         | `sync-dev`    | `true`          | Point `dev` at the release commit afterwards. Keep it on unless the repo has no `dev`. |
-
-`release.yml` outputs `tag` (`vX.Y.Z`, empty when nothing was released) and
-`sha` (the release commit).
+| Workflow                      | Input            | Default         | Meaning                                                                       |
+| ----------------------------- | ---------------- | --------------- | ----------------------------------------------------------------------------- |
+| both                          | `runs-on`        | `ubuntu-latest` | Runner label (e.g. `self-hosted`).                                            |
+| `auto-pr.yml`, `pr-check.yml` | `base-branch`    | `dev`           | Branch the work PRs target; its PR into the release branch is the release PR. |
+| `auto-pr.yml`, `pr-check.yml` | `release-branch` | `main`          | Branch the release PR targets.                                                |
 
 ---
 

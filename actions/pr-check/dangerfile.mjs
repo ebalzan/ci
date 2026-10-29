@@ -1,11 +1,14 @@
-// Danger entry point of the work-PR check: action.yml runs
-// `danger ci --dangerfile` on this file. Danger puts its DSL (danger, fail,
-// warn) on the global scope and awaits the default export. This file only
-// gathers the PR's data; rules.mjs decides.
+// Danger entry point of the PR check: action.yml runs `danger ci --dangerfile`
+// on this file. Danger puts its DSL (danger, fail, warn) on the global scope
+// and awaits the default export. This file only gathers the PR's data; the
+// rules of the PR's kind (PR_KIND) decide: work-pr/rules.mjs or
+// release-pr/rules.mjs.
 
 import process from 'node:process'
 
-import { checkWorkPr, workPrConfig } from './rules.mjs'
+import { checkReleasePr } from './release-pr/rules.mjs'
+import { prConfig } from './rules.mjs'
+import { checkWorkPr } from './work-pr/rules.mjs'
 
 const PROJECTS_QUERY = `
   query($owner: String!, $repo: String!, $number: Int!) {
@@ -46,7 +49,7 @@ async function projectsOf({ owner, repo, number }) {
 export default async function () {
   const { pr } = danger.github
   const owner = pr.base.repo.owner.login
-  const config = workPrConfig(process.env)
+  const config = prConfig(process.env)
   config.projectOwner ||= owner
 
   let projects = []
@@ -59,7 +62,8 @@ export default async function () {
     }
   }
 
-  const { fails, warnings } = checkWorkPr({
+  const check = process.env.PR_KIND === 'release' ? checkReleasePr : checkWorkPr
+  const { fails, warnings } = check({
     pr: {
       title: pr.title,
       body: pr.body ?? '',
@@ -72,6 +76,7 @@ export default async function () {
       changedLines: (pr.additions ?? 0) + (pr.deletions ?? 0),
     },
     commitMessages: danger.git.commits.map(commit => commit.message),
+    releaseTitle: process.env.RELEASE_TITLE ?? '',
     projects,
     projectsError,
     behindBy: Number.parseInt(process.env.BEHIND_BY ?? '', 10) || 0,

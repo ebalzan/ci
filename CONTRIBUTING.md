@@ -30,25 +30,25 @@ Node.js ≥ 24 for development (the published CLI needs ≥ 22.12), bash, git, a
 
 ```text
 .github/workflows/
-  auto-pr.yml               reusable  draft PR + label, assignee, milestone, board, AI description
-  work-pr.yml               reusable  the work-PR check: commitlint (title, commits) + Danger (metadata)
-  promote-dev-to-main.yml   reusable  the evergreen dev → main PR
-  release.yml               reusable  semver bump, tag, GitHub Release, sync dev; outputs tag/sha
-  self-*.yml                this repo's own flow: callers of the four above, by local path
-actions/                    composite actions the reusable workflows run
-  auto-pr/                  gh + Claude Code (headless): action.yml + a script per step
-  work-pr/                  rules.mjs (the rules) + dangerfile.mjs (Danger entry) + its own lockfile
-  promote/  release/
-scripts/shared-vars.mjs     AUTO_* loading: repo variables, then config/actions.env
-scripts/release/            release-main, promote-dev-to-main, release-utils
-commitlint.config.mjs       the Conventional Commits rule (hook + work-PR check)
+  auto-pr.yml               reusable  work PR / release PR + label, assignee, milestone, board, AI description
+  pr-check.yml              reusable  the PR check (Work PR / Release PR jobs): commitlint + Danger
+  self-*.yml                this repo's own flow: callers of the two above, by local path
+actions/                    composite actions the reusable workflows run; each folder holds
+                            everything its action needs (action.yml + a file per step)
+  auto-pr/                  gh + git-cliff + Claude Code (headless): work-pr.sh, release-pr.sh, …
+  pr-check/                 dangerfile.mjs (Danger entry) + rules.mjs (what every PR needs)
+    work-pr/  release-pr/   rules.mjs: each PR kind's own rules, on top of ../rules.mjs
+scripts/                    shared by the actions
+  shared-vars.mjs           AUTO_* loading: repo variables, then config/actions.env
+  release-title.mjs         the release PR's title (auto-pr sets it, pr-check requires it)
+commitlint.config.mjs       the Conventional Commits rule (hook + PR check)
 bin/
   cli.mjs                   the `ebalzan-ci` entry point
   gh-bootstrap.sh           variables, secrets, settings, rulesets → GitHub
   gh-reset.sh               delete Actions config on a repo
   onboard.sh                templates + bootstrap for a new repo
   _lib.sh  _json.mjs        shared helpers (not commands)
-config/                     the shared layer: actions.env, types.json, repo-settings.json,
+config/                     the shared layer: actions.env, types.json, cliff.toml, repo-settings.json,
                             rulesets/, repos.env, secrets.env.example (secrets.env is gitignored)
 templates/                  what `onboard` writes into a repo (__PLACEHOLDERS__)
 renovate/tooling.json       shared Renovate preset
@@ -65,24 +65,25 @@ Check with `npm pack --dry-run`.
 
 PR Checks (`self-pr-checks.yml`) runs, in parallel:
 
-| Job       | Runs                                                                                                                                               |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `work-pr` | The shared work-PR check, from the local workflow file.                                                                                            |
-| `check`   | `npm run check` (`bash -n`, `node --check`), `npm run format:check` (Prettier with the `@ebalzan/config` rules), `npm test`, `npm pack --dry-run`. |
+| Job        | Runs                                                                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check` | The shared PR check, from the local workflow file.                                                                                                 |
+| `check`    | `npm run check` (`bash -n`, `node --check`), `npm run format:check` (Prettier with the `@ebalzan/config` rules), `npm test`, `npm pack --dry-run`. |
 
 The tests never touch GitHub: they use throwaway git repos and run `gh` with an
 empty config directory, so it is logged out. What they cover:
 
 | Suite                    | Covers                                                                                                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `release-utils.test.mjs` | Bump rules, breaking changes, branch types, semver.                                                                                                                   |
 | `rules.test.mjs`         | `types.json` is well-formed (minor types first) and is what every reader sees; JSON merge; shipped rulesets and settings are well-formed and cannot break `sync-dev`. |
-| `work-pr.test.mjs`       | Every work-PR rule (`actions/work-pr/rules.mjs`) and warning, on plain objects.                                                                                       |
+| `pr-check.test.mjs`      | What every PR needs (`actions/pr-check/rules.mjs`): the AUTO_* knobs, assignee, milestone, board, description.                                                        |
+| `work-pr.test.mjs`       | Every work-PR rule (`actions/pr-check/work-pr/rules.mjs`) and warning, on plain objects.                                                                              |
+| `release-pr.test.mjs`    | Every release-PR rule (`actions/pr-check/release-pr/rules.mjs`) and warning, on plain objects.                                                                        |
+| `release-title.test.mjs` | The release PR's title rule, then git-cliff (`config/cliff.toml`) on throwaway repos: versions, moving major tags, first release, changelog.                          |
 | `shared-vars.test.mjs`   | The AUTO_* layers (job env, repo variables, `config/actions.env`) and the `$GITHUB_ENV` output.                                                                       |
 | `cli.test.mjs`           | Command dispatch, `commit-msg` on subjects and message files, `--help` forwarding.                                                                                    |
-| `onboard.test.mjs`       | Dry run, template rendering, Node vs non-Node repos, keep vs `--force`, refusals, `.gitignore` lines, `@ebalzan/config` wiring.                                       |
+| `onboard.test.mjs`       | Dry run, template rendering, Node vs non-Node repos, keep vs `--force`, obsolete callers removed, refusals, `.gitignore` lines, `@ebalzan/config` wiring.             |
 | `bootstrap.test.mjs`     | Dry-run plans: layer labels, settings/ruleset merging, shared and per-repo secrets dirs, `--skip`.                                                                    |
-| `release.test.mjs`       | `release-main.mjs` end to end against a local bare origin and a fake GitHub API: tag-only and `package.json` releases, re-runs, no-conventional-commit failure.       |
 
 To try a command for real against a repo of yours, use `--dry-run` first; the
 bootstrap dry run only reads from GitHub.
@@ -102,10 +103,14 @@ Rules worth knowing:
 
 - **The work types live in one place**: `config/types.json` (type,
   release bump, label color; key order = precedence). commitlint, the release
-  scripts, the work-PR check and auto-pr all read it; adding a type is one line
-  there.
-- **Action dependencies are locked** — `actions/work-pr` installs from its own
-  `package-lock.json`, commitlint from the root one (`--omit=dev`).
+  scripts, the release PR title, the PR check and auto-pr all read it; adding a
+  type is one line there. `config/cliff.toml` groups by whatever type it finds
+  and bumps `feat` as minor, the rest as patch, so it needs no edit unless a new
+  type is minor.
+- **Action dependencies are locked** in the root `package-lock.json`: the
+  actions run `npm ci` on this repo's checkout. Tools only the actions use
+  (Danger, git-cliff) are `devDependencies`, so installing `@ebalzan/ci` in a
+  repo does not pull them in; the CLI's own (commitlint) are `dependencies`.
 - **Keep action inputs backward compatible** within a major: this repo's own
   PRs run the workflow files at the PR commit but the actions at the last
   release (below).
@@ -119,11 +124,12 @@ Rules worth knowing:
 
 ## Releasing a change
 
-Merging into `dev` opens or updates the `dev → main` PR (`self-promote.yml`).
-Squash-merging that is the release: `self-release.yml` tags `vX.Y.Z`, creates
-the GitHub Release, **moves the major tag** (`v2`) to it, and publishes to npm
-when `NPM_PUBLISH` is on. Callers pin `@v2`, so that is the moment the change
-reaches every repo — merge the promotion PR deliberately.
+Merging into `dev` opens or updates the `dev → main` release PR
+(`self-auto-pr.yml`). Squash-merging that is the release: `self-release.yml`
+tags `vX.Y.Z`, creates the GitHub Release, **moves the major tag** (`v4`) to
+it, and publishes to npm when `NPM_PUBLISH` is on. Callers pin `@v4`, so that
+is the moment the change reaches every repo — merge the release PR
+deliberately.
 
 - **What runs which version.** The `self-*.yml` callers use the reusable
   workflows by local path (`./.github/workflows/…`), so the workflow file runs

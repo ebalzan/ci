@@ -1,8 +1,0 @@
-{
-  "private": true,
-  "description": "Runtime dependencies of actions/work-pr, installed by its action.yml (npm ci). commitlint comes from the root package.",
-  "type": "module",
-  "dependencies": {
-    "danger": "14.0.7"
-  }
-}

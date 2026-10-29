@@ -2,23 +2,57 @@
 #
 # describe.sh — the "Describe" step of actions/auto-pr.
 #
-# Runs Claude Code headless on the branch with describe-prompt.md (__BRANCH__,
-# __TYPE__ and __BASE__ filled in) and writes its reply as the PR description.
-# Best-effort: any failure is a warning and leaves the description as it was.
+# Runs Claude Code headless on the branch and writes its reply as the PR
+# description: describe-prompt.md for a work PR, describe-release-prompt.md for
+# the release PR (__BRANCH__, __TYPE__ and __BASE__ filled in). The release PR's
+# description is that summary followed by the changelog (CHANGELOG, from
+# release-pr.sh). Best-effort: any failure is a warning and leaves a work PR's
+# description as it was, a release PR's as the changelog alone.
 #
-# Env: GH_TOKEN, GH_REPO, ANTHROPIC_API_KEY, PR_URL, PR_TYPE, CLAUDE_CODE (the
-# pinned npm spec), plus the runner's GITHUB_* and RUNNER_TEMP.
+# Env: GH_TOKEN, GH_REPO, ANTHROPIC_API_KEY, PR_URL, PR_KIND, PR_LABEL, CHANGELOG
+# (release PR only), CLAUDE_CODE (the pinned npm spec), plus the runner's
+# GITHUB_* and RUNNER_TEMP.
 set -uo pipefail
 
-base="${AUTO_BASE_BRANCH:-dev}"
+if [ "${PR_KIND:-work}" = release ]; then
+  base="${AUTO_RELEASE_BRANCH:-main}"
+  prompt_file=describe-release-prompt.md
+else
+  base="${AUTO_BASE_BRANCH:-dev}"
+  prompt_file=describe-prompt.md
+fi
 model="${AUTO_DESCRIBE_MODEL:-claude-sonnet-5-5}"
 args=(--model "$model")
 # Haiku rejects the effort setting.
 [[ "$model" == claude-haiku* ]] || args+=(--effort "${AUTO_DESCRIBE_EFFORT:-low}")
 
-prompt="$(< "$(dirname "${BASH_SOURCE[0]}")/describe-prompt.md")"
+# publish SUMMARY — SUMMARY, then the changelog when there is one, as the
+# description.
+publish() {
+  local body="$RUNNER_TEMP/auto-pr-body.md"
+  {
+    if [ -s "$1" ]; then cat "$1"; echo; fi
+    if [ -n "${CHANGELOG:-}" ]; then cat "$CHANGELOG"; fi
+  } > "$body"
+  [ -s "$body" ] || return 0
+  gh pr edit "$PR_URL" --body-file "$body" >/dev/null ||
+    echo "::warning::Could not update the description."
+}
+
+# give_up WHY — a warning; a release PR still gets its changelog.
+give_up() {
+  if [ -n "${CHANGELOG:-}" ]; then
+    echo "::warning::$1 The description is the changelog alone."
+    publish /dev/null
+  else
+    echo "::warning::$1 The description is left as it was."
+  fi
+  exit 0
+}
+
+prompt="$(< "$(dirname "${BASH_SOURCE[0]}")/$prompt_file")"
 prompt="${prompt//__BRANCH__/$GITHUB_REF_NAME}"
-prompt="${prompt//__TYPE__/$PR_TYPE}"
+prompt="${prompt//__TYPE__/$PR_LABEL}"
 prompt="${prompt//__BASE__/$base}"
 
 # --bare: none of the branch's own Claude settings, hooks or CLAUDE.md.
@@ -30,15 +64,12 @@ if ! printf '%s\n' "$prompt" |
     --tools 'Bash,Read,Grep,Glob' \
     --allowedTools 'Bash(git log:*),Bash(git diff:*),Bash(git show:*),Read,Grep,Glob' \
     > "$out"; then
-  echo "::warning::Claude Code failed; the description is left as it was."
-  exit 0
+  give_up "Claude Code failed."
 fi
 
 description="$RUNNER_TEMP/auto-pr-description.md"
 jq -r 'select(.is_error | not) | .result // empty' "$out" > "$description"
 if [ ! -s "$description" ]; then
-  echo "::warning::Claude Code returned no description ($(jq -r '.subtype // "unknown"' "$out")); the description is left as it was."
-  exit 0
+  give_up "Claude Code returned no description ($(jq -r '.subtype // "unknown"' "$out"))."
 fi
-gh pr edit "$PR_URL" --body-file "$description" >/dev/null ||
-  echo "::warning::Could not update the description."
+publish "$description"

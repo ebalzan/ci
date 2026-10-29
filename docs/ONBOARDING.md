@@ -50,8 +50,6 @@ Onboard   owner/my-repo  ←  ebalzan/ci@v2 (runs-on: ubuntu-latest)
     create     .github/actions.env
     create     .github/workflows/auto-pr.yml
     create     .github/workflows/pr-checks.yml
-    create     .github/workflows/promote-dev-to-main.yml
-    create     .github/workflows/release.yml
     create     .husky/commit-msg
     create     eslint.config.mjs
     create     renovate.json
@@ -75,7 +73,7 @@ to only make the local commit (inspect it with `git show --stat`, push it
 yourself later), `--force` to replace files the repo already has. All options:
 [CLI.md](CLI.md#onboard).
 
-**Existing files are kept.** If the repo already has, say, a `release.yml`,
+**Existing files are kept.** If the repo already has, say, a `pr-checks.yml`,
 `onboard` leaves it and says so; compare it with
 [templates/](../templates/.github/workflows/) and merge by hand, or re-run with
 `--force` on a fresh branch.
@@ -115,15 +113,13 @@ yourself later), `--force` to replace files the repo already has. All options:
 
 ## What each generated file is for
 
-| File                                        | Runs on                   | Does                                                                                                      |
-| ------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/auto-pr.yml`             | push to any work branch   | Tracking issue + PR into `dev` + board card. [Details](AUTO_WORK_ITEMS_WORKFLOW.md)                       |
-| `.github/workflows/pr-checks.yml`           | PRs into `dev` and `main` | The shared title check, plus **your** build/test jobs — add them here.                                    |
-| `.github/workflows/promote-dev-to-main.yml` | push to `dev`             | Opens/updates the single `dev → main` PR.                                                                 |
-| `.github/workflows/release.yml`             | push to `main`            | Bump, tag, GitHub Release, sync `dev` — plus **your** deploy job, chained on `needs.release.outputs.tag`. |
-| `.github/actions.env`                       | `bootstrap`               | The repo's own variables.                                                                                 |
-| `.husky/commit-msg`                         | every local commit        | Rejects non-conventional messages early. Never blocks when the package is missing.                        |
-| `renovate.json`                             | Renovate, weekly          | One `chore(deps): update dev tooling` PR into `dev`.                                                      |
+| File                              | Runs on                       | Does                                                                                                                |
+| --------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/auto-pr.yml`   | push to any branch but `main` | A work branch: its PR into `dev`. `dev`: the single `dev → main` release PR. [Details](CI_FLOW.md#3-stage-by-stage) |
+| `.github/workflows/pr-checks.yml` | PRs into `dev` and `main`     | The shared PR check (`Work PR` / `Release PR`), plus **your** build/test jobs — add them here.                      |
+| `.github/actions.env`             | `bootstrap`                   | The repo's own variables.                                                                                           |
+| `.husky/commit-msg`               | every local commit            | Rejects non-conventional messages early. Never blocks when the package is missing.                                  |
+| `renovate.json`                   | Renovate, weekly              | One `chore(deps): update dev tooling` PR into `dev`.                                                                |
 
 ---
 
@@ -134,14 +130,10 @@ What is shared and what is now the repo's own, stage by stage:
 
 - **Add the repo's own checks** to `pr-checks.yml` — the template has a
   commented `validate` job (`npm ci`, `ebalzan-config verify`, `npm run
-validate`). They run in parallel with `title`.
+validate`). They run in parallel with `pr-check`.
 - **Own Prettier/ESLint/TypeScript config?** `onboard` keeps it and says so.
   Make it extend `@ebalzan/config` instead of copying rules, then
   `npx ebalzan-config verify` passes ([ARCHITECTURE §10](ARCHITECTURE.md#10-the-two-packages-ebalzanci-and-ebalzanconfig)).
-- **Add the deploy** to `release.yml` — the template has a commented `deploy`
-  job. Gate it with `if: needs.release.outputs.tag != ''`. For anything beyond
-  a one-liner, use a repo-local `deploy.yml` plus a manual `redeploy.yml`:
-  [ARCHITECTURE.md §4](ARCHITECTURE.md#4-deploys-are-yours).
 - **A board?** Set `AUTO_PROJECT_NUMBER` in `.github/actions.env` and re-run
   `ebalzan-ci bootstrap`. The board needs the fields listed in
   [CONFIGURATION.md](CONFIGURATION.md#project-board).

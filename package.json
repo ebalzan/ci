@@ -1,7 +1,7 @@
 {
   "name": "@ebalzan/ci",
   "version": "3.0.2",
-  "description": "One set of CI/CD rules for all your GitHub repos: reusable workflows (auto PR with AI description, work-PR checks, semver releases), a CLI that syncs Actions config, repo settings and branch rulesets, and a commitlint commit-msg hook.",
+  "description": "One set of CI/CD rules for all your GitHub repos: reusable workflows (auto work and release PRs with AI descriptions, PR checks, semver releases), a CLI that syncs Actions config, repo settings and branch rulesets, and a commitlint commit-msg hook.",
   "keywords": [
     "github-actions",
     "reusable-workflows",
@@ -10,7 +10,7 @@
     "conventional-commits",
     "commitlint",
     "danger",
-    "semantic-release",
+    "git-cliff",
     "semver",
     "rulesets",
     "husky",
@@ -52,7 +52,7 @@
     "access": "public"
   },
   "scripts": {
-    "check": "bash -n bin/*.sh && for f in bin/*.mjs scripts/*.mjs scripts/release/*.mjs actions/work-pr/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "for f in bin/*.sh actions/*/*.sh; do bash -n \"$f\" || exit 1; done && for f in bin/*.mjs scripts/*.mjs actions/*/*.mjs actions/*/*/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
     "test": "node --test 'test/*.test.mjs'",
     "gh:bootstrap": "bash bin/gh-bootstrap.sh",
     "gh:reset": "bash bin/gh-reset.sh",
@@ -64,6 +64,8 @@
   },
   "devDependencies": {
     "@ebalzan/config": "0.1.0",
+    "danger": "14.0.7",
+    "git-cliff": "2.14.2",
     "prettier": "3.9.10"
   },
   "prettier": "@ebalzan/config/prettier"

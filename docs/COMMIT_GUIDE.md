@@ -11,7 +11,7 @@ commits fit into the branch workflow. The full pipeline, stage by stage, is in
 - The model is work branch → `dev` → `main`. Both `dev` and `main` are long-lived.
 - Work happens on short-lived branches (`feat/*`, `fix/*`, `docs/*`, …) cut from `dev`.
 - Work PRs target `dev` and are squash-merged.
-- `main` only receives the automated `dev` → `main` promotion PR.
+- `main` only receives the automated `dev` → `main` release PR.
 - Every push to `main` creates a release (and the repo ships it), then
   force-points `dev` at the release commit.
 
@@ -81,23 +81,17 @@ git push -u origin feat/your-change
 
 ## Release Notes and Versioning
 
-Release notes and semantic versioning are automatic.
+The next version and the release notes are computed for you.
 
-- A push to `main` runs the repo's `release.yml`, which calls this repo's
-  reusable `release.yml`.
-- The bump is computed by scanning every Conventional Commit since the previous
-  tag. Branch names don't affect it, and if no commit is conventional the release
-  fails.
-- With a `package.json`, it updates it (and the lockfile) to the release
-  version and commits `chore(release): <version>`. The workflow skips commits
-  with that prefix, so the release commit doesn't trigger another release.
-  Without one, the release is the tag alone.
-- It creates tag `vX.Y.Z` and a GitHub Release; the repo then ships that tag.
-- It force-points `dev` at the release commit. If a later `git pull` on `dev`
-  conflicts, run `git reset --hard origin/dev` and branch from there.
-- `PR Checks` validates PR titles so squash merges always produce a conventional commit.
+- Every push to `dev` updates the release PR (`dev` → `main`): its title is the
+  next version, computed by scanning every Conventional Commit since the
+  previous `vX.Y.Z` tag (`feat: release v1.4.0`), and its description lists
+  those commits by type. Branch names don't affect it, and if no commit is
+  conventional there is no release PR.
+- `PR Checks` validates PR titles so squash merges always produce a conventional
+  commit, and requires the release PR's title to be exactly the computed one.
 
-Never bump the version, create a tag, or write a `chore(release):` commit by hand.
+Never edit the release PR's title, bump a version, or create a tag by hand.
 
 Version impact by commit convention:
 
@@ -112,7 +106,7 @@ GitHub squash merge uses the PR title as the commit title.
 - keep PR titles in Conventional Commit format
 - make the PR title match the release impact implied by the branch type (`feat` -> `minor`; every other supported type -> `patch`)
 - if the change is breaking, mark the PR title with `!` to force a `major` release, for example `feat(api)!: remove legacy endpoint`
-- the `dev` → `main` promotion PR is titled automatically from the promoted commits; it only needs to stay a valid Conventional Commit
+- the `dev` → `main` release PR is titled automatically from the released commits — `<type>[!]: release vX.Y.Z`, e.g. `feat: release v1.4.0` — and the PR check requires exactly that title, so never edit it
 
 ## Troubleshooting
 

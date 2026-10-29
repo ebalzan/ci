@@ -9,7 +9,6 @@ import { test } from 'node:test'
 
 import { deepMerge, diffTopLevel, stripDocKeys } from '../bin/_json.mjs'
 import commitlintConfig, { types } from '../commitlint.config.mjs'
-import { branchReleaseTypes, commitTypes } from '../scripts/release/release-utils.mjs'
 import { ROOT } from './helpers.mjs'
 
 test('types.json: release, color, minor types first; every reader sees it', () => {
@@ -25,13 +24,11 @@ test('types.json: release, color, minor types first; every reader sees it', () =
   assert.deepEqual(
     releases,
     [...releases].sort((a, b) => (a === b ? 0 : a === 'minor' ? -1 : 1)),
-    'minor types come first: the promotion title takes the first type present',
+    'minor types come first: the release PR title takes the first type present',
   )
 
   assert.deepEqual(types, order)
   assert.deepEqual(commitlintConfig.rules['type-enum'][2], order)
-  assert.deepEqual(Object.keys(commitTypes), order)
-  assert.deepEqual([...branchReleaseTypes.keys()], order)
 })
 
 test('deepMerge: objects merge, arrays and scalars are replaced', () => {

@@ -49,11 +49,11 @@ To change one for a single repo, put just that key in its
 
 ## Branch rulesets
 
-| File                        | Ruleset name               | Default      | Rules                                                                                      |
-| --------------------------- | -------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
-| `protect-main.json`         | `ci: protect main`         | **active**   | `main` cannot be deleted or force-pushed.                                                  |
-| `protect-dev.json`          | `ci: protect dev`          | **active**   | `dev` cannot be deleted.                                                                   |
-| `require-pull-request.json` | `ci: require pull request` | **disabled** | Changes to `main`/`dev` only by squash-merged PR with `title / Validate PR Title` passing. |
+| File                        | Ruleset name               | Default      | Rules                                                                                                                                                               |
+| --------------------------- | -------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `protect-main.json`         | `ci: protect main`         | **active**   | `main` cannot be deleted or force-pushed.                                                                                                                           |
+| `protect-dev.json`          | `ci: protect dev`          | **active**   | `dev` cannot be deleted.                                                                                                                                            |
+| `require-pull-request.json` | `ci: require pull request` | **disabled** | Changes to `main`/`dev` only by squash-merged PR with `pr-check / Work PR` and `pr-check / Release PR` passing (each skipped, so passing, on the other kind of PR). |
 
 ### Why `dev` can still be force-pushed
 
@@ -84,7 +84,7 @@ echo '{ "enforcement": "active" }' > .github/rulesets/require-pull-request.json
 ebalzan-ci bootstrap --skip vars,secrets
 ```
 
-Then merge a promotion PR and check that the release run pushed its commit and
+Then merge a release PR and check that the release run pushed its commit and
 synced `dev`. If it was rejected, set the file back to `"disabled"` and
 re-run the bootstrap. Once it works on your setup, flip `enforcement` in
 `config/rulesets/require-pull-request.json` itself to roll it out everywhere.

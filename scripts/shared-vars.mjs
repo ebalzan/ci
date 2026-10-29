@@ -5,8 +5,8 @@
 // shared value changes by moving the ref.
 //
 // Two ways in:
-//   import { applySharedVars } from './shared-vars.mjs'   (promote-dev-to-main.mjs)
-//   node scripts/shared-vars.mjs                          (actions/auto-pr, actions/work-pr)
+//   import { applySharedVars } from './shared-vars.mjs'   (tests)
+//   node scripts/shared-vars.mjs                          (actions/auto-pr, actions/pr-check)
 // The second applies them to a copy of the environment and appends every key it
 // set to $GITHUB_ENV, so the job's later steps see them as plain env vars.
 
