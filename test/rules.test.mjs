@@ -1,35 +1,37 @@
-// The commit types are written down in three places that must agree: the
-// managed validator (hook + PR title), release-utils (bumps and branch types)
-// and auto-work-items' TYPE_CONFIG (labels, priorities). Plus the shipped JSON
-// rules must be valid for the GitHub API shapes the bootstrap sends.
+// THE list of work types (config/types.json) must be well-formed and is
+// what every reader sees. Plus the shipped JSON rules must be valid for the
+// GitHub API shapes the bootstrap sends.
 
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { deepMerge, diffTopLevel, stripDocKeys } from '../bin/_json.mjs'
-import { branchReleaseTypes } from '../scripts/release/release-utils.mjs'
+import commitlintConfig, { types } from '../commitlint.config.mjs'
+import { branchReleaseTypes, commitTypes } from '../scripts/release/release-utils.mjs'
 import { ROOT } from './helpers.mjs'
 
-const require = createRequire(import.meta.url)
-
-function validatorTypes() {
-  const sh = readFileSync(
-    join(ROOT, 'managed', 'scripts', 'release', 'validate-conventional-subject.sh'),
-    'utf8',
+test('types.json: release, color, minor types first; every reader sees it', () => {
+  const fromFile = stripDocKeys(
+    JSON.parse(readFileSync(join(ROOT, 'config', 'types.json'), 'utf8')),
   )
-  const match = sh.match(/commit_regex='\^\(([^)]+)\)/)
-  assert.ok(match, 'commit_regex not found in the validator')
-  return match[1].split('|').sort()
-}
+  const order = Object.keys(fromFile)
+  const releases = order.map(type => fromFile[type].release)
+  for (const [type, { release, color }] of Object.entries(fromFile)) {
+    assert.ok(['minor', 'patch'].includes(release), `${type}: release must be minor or patch`)
+    assert.match(color, /^[0-9A-F]{6}$/, `${type}: label color`)
+  }
+  assert.deepEqual(
+    releases,
+    [...releases].sort((a, b) => (a === b ? 0 : a === 'minor' ? -1 : 1)),
+    'minor types come first: the promotion title takes the first type present',
+  )
 
-test('validator, release-utils and TYPE_CONFIG list the same types', () => {
-  const { TYPE_CONFIG } = require('../actions/auto-work-items/dist/config.js')
-  const fromValidator = validatorTypes()
-  assert.deepEqual([...branchReleaseTypes.keys()].sort(), fromValidator)
-  assert.deepEqual(Object.keys(TYPE_CONFIG).sort(), fromValidator)
+  assert.deepEqual(types, order)
+  assert.deepEqual(commitlintConfig.rules['type-enum'][2], order)
+  assert.deepEqual(Object.keys(commitTypes), order)
+  assert.deepEqual([...branchReleaseTypes.keys()], order)
 })
 
 test('deepMerge: objects merge, arrays and scalars are replaced', () => {

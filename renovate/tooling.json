@@ -18,7 +18,7 @@
       "enabled": false
     },
     {
-      "description": "One PR per repo for the shared tooling, including the two @ebalzan packages (majors get their own PR). chore keeps the branch type and the PR title in step for pr-title.",
+      "description": "One PR per repo for the shared tooling, including the two @ebalzan packages (majors get their own PR). chore keeps the branch type and the PR title in step for the work-PR check.",
       "matchPackageNames": [
         "prettier",
         "eslint",

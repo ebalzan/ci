@@ -23,19 +23,27 @@ test(
   { skip: !hasGh && 'gh not installed' },
   t => {
     const result = dryRun(t, {
-      '.github/actions.env':
-        'AUTO_PROJECT_NUMBER=7\nAUTO_DESCRIBE_EFFORT=high\nAUTO_SIZE_MAP_JSON={"feat":"M","fix":"S","docs":"S","style":"S","refact":"M","perf":"M","test":"S","build":"S","ci":"S","chore":"S","revert":"S"}\n',
+      '.github/actions.env': 'AUTO_PROJECT_NUMBER=7\nAUTO_DESCRIBE_EFFORT=high\n',
     })
     assert.equal(result.status, 0, result.stderr + result.stdout)
     const out = result.stdout
     assert.match(out, /AUTO_PROJECT_NUMBER +repo\n/)
     assert.match(out, /AUTO_DESCRIBE_EFFORT +repo \(overrides shared\)/)
-    assert.match(out, /AUTO_SIZE_MAP_JSON +repo \(same as shared: redundant\)/)
     assert.match(out, /read at run time \(not pushed\): .*AUTO_DESCRIBE_MODEL/)
     assert.match(out, /repository settings\n.*squash_merge_commit_title=PR_TITLE/)
     assert.match(out, /ci: protect main +active · protect-main\.json/)
     assert.match(out, /ci: require pull request +disabled · require-pull-request\.json/)
     assert.match(out, /Dry run complete/)
+  },
+)
+
+test(
+  'dry run: a repo variable equal to the shared one is flagged redundant',
+  { skip: !hasGh && 'gh not installed' },
+  t => {
+    const result = dryRun(t, { '.github/actions.env': 'AUTO_DESCRIBE_MODEL=claude-sonnet-5-5\n' })
+    assert.equal(result.status, 0, result.stderr + result.stdout)
+    assert.match(result.stdout, /AUTO_DESCRIBE_MODEL +repo \(same as shared: redundant\)/)
   },
 )
 

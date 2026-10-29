@@ -1,5 +1,5 @@
 {
-  "$comment": "Changes reach main and dev only through a squash-merged PR whose 'title / Validate PR Title' check passed. DISABLED by default: release.yml pushes the release commit to main and force-points dev with GITHUB_TOKEN, so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-pull-request.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through. Reference: docs/REPO_RULES.md.",
+  "$comment": "Changes reach main and dev only through a squash-merged PR whose 'work-pr / Work PR' check passed (skipped, so passed, for the dev → main release PR). DISABLED by default: release.yml pushes the release commit to main and force-points dev with GITHUB_TOKEN, so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-pull-request.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through. Reference: docs/REPO_RULES.md.",
   "name": "ci: require pull request",
   "target": "branch",
   "enforcement": "disabled",
@@ -26,7 +26,7 @@
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": false,
-        "required_status_checks": [{ "context": "title / Validate PR Title" }]
+        "required_status_checks": [{ "context": "work-pr / Work PR" }]
       }
     }
   ]

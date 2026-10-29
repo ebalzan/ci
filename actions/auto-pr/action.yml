@@ -1,0 +1,178 @@
+# Opens or updates the PR of the pushed work branch (<type>/<description>) into
+# the base branch (dev). No issue is created.
+#
+#   1. Load variables   the caller's AUTO_* vars, then config/actions.env.
+#   2. Find or open PR  the branch's open PR, or a new DRAFT one: title = the
+#                       first commit whose type is the branch's (else
+#                       "<type>: <description>"), body = the commit list.
+#   3. Sync metadata    type label (created when missing, with its color from
+#                       config/types.json), the pusher as assignee,
+#                       AUTO_MILESTONE_TITLE, the AUTO_PROJECT_NUMBER board. Each
+#                       is best-effort: a failure is a warning, and the work-PR
+#                       check then names what is missing.
+#   4. Describe         Claude Code, headless, reads the branch with git and
+#                       writes the description (AUTO_DESCRIBE_MODEL /
+#                       AUTO_DESCRIBE_EFFORT). On every push, so it follows the
+#                       work; skipped without an Anthropic API key.
+#   5. Ready for review only for a PR this run opened: it leaves draft once the
+#                       rest is done, so the work-PR check (which skips drafts)
+#                       first runs on the finished PR.
+#
+# Needs a full-history checkout of the pushed branch, Node >= 22, and the job
+# env AUTO_BASE_BRANCH + REPO_VARS_JSON. Called by .github/workflows/auto-pr.yml.
+name: Auto PR
+description: Open or update the PR of a work branch, with type label, assignee, milestone, board and an AI description.
+inputs:
+  github-token:
+    description: Token for gh. A classic PAT (`repo` + `project`) lets the PR trigger PR Checks and reach a board owned by a personal account.
+    required: true
+  anthropic-api-key:
+    description: Anthropic API key for the description. Empty keeps the commit list as the description.
+    default: ''
+outputs:
+  url:
+    description: The PR's URL, or empty when the branch has nothing to merge yet.
+    value: ${{ steps.pr.outputs.url }}
+runs:
+  using: composite
+  steps:
+    - name: Load variables
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../../scripts/shared-vars.mjs"
+
+    - name: Find or open PR
+      id: pr
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        types_file="$GITHUB_ACTION_PATH/../../config/types.json"
+        base="${AUTO_BASE_BRANCH:-dev}"
+        branch="$GITHUB_REF_NAME"
+        type="${branch%%/*}"
+
+        if [[ "$branch" != */?* ]] ||
+          ! jq -e --arg t "$type" '($t | startswith("$") | not) and has($t)' "$types_file" >/dev/null; then
+          types="$(jq -r '[keys_unsorted[] | select(startswith("$") | not)] | join(", ")' "$types_file")"
+          echo "::error::Branch '$branch' is not <type>/<description> with a type of: $types. Rename it."
+          exit 1
+        fi
+        echo "type=$type" >> "$GITHUB_OUTPUT"
+
+        if [ "$(git rev-list --count "origin/$base..HEAD")" -eq 0 ]; then
+          echo "::notice::'$branch' has no commits that are not on '$base' yet; no PR to open."
+          exit 0
+        fi
+
+        url="$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')"
+        if [ -z "$url" ]; then
+          title="$(git log --reverse --format=%s "origin/$base..HEAD" |
+            grep -m1 -E "^$type(\([^)]+\))?!?: ." || true)"
+          if [ -z "$title" ]; then
+            description="${branch#*/}"
+            title="$type: ${description//[-_]/ }"
+          fi
+          body="$RUNNER_TEMP/auto-pr-commits.md"
+          { echo '## Commits'; echo; git log --reverse --format='- %s' "origin/$base..HEAD"; } > "$body"
+          url="$(gh pr create --draft --base "$base" --head "$branch" --title "$title" --body-file "$body")"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Opened $url"
+        fi
+        echo "url=$url" >> "$GITHUB_OUTPUT"
+
+    - name: Sync metadata
+      if: ${{ steps.pr.outputs.url != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        PR_URL: ${{ steps.pr.outputs.url }}
+        PR_TYPE: ${{ steps.pr.outputs.type }}
+      run: |
+        set -uo pipefail
+        color="$(jq -r --arg t "$PR_TYPE" '.[$t].color' "$GITHUB_ACTION_PATH/../../config/types.json")"
+        # Fails when the label exists — left as it is.
+        gh label create "$PR_TYPE" --color "$color" --description "Changes for '$PR_TYPE' branches" >/dev/null 2>&1
+
+        gh pr edit "$PR_URL" --add-label "$PR_TYPE" >/dev/null ||
+          echo "::warning::Could not add the '$PR_TYPE' label."
+        gh pr edit "$PR_URL" --add-assignee "$GITHUB_ACTOR" >/dev/null ||
+          echo "::warning::Could not assign $GITHUB_ACTOR."
+
+        if [ -n "${AUTO_MILESTONE_TITLE:-}" ]; then
+          gh pr edit "$PR_URL" --milestone "$AUTO_MILESTONE_TITLE" >/dev/null ||
+            echo "::warning::Could not set the milestone '$AUTO_MILESTONE_TITLE' (AUTO_MILESTONE_TITLE): it must exist and be open."
+        fi
+
+        if [ -n "${AUTO_PROJECT_NUMBER:-}" ]; then
+          owner="${AUTO_PROJECT_OWNER:-$GITHUB_REPOSITORY_OWNER}"
+          gh project item-add "$AUTO_PROJECT_NUMBER" --owner "$owner" --url "$PR_URL" >/dev/null ||
+            echo "::warning::Could not add the PR to project $AUTO_PROJECT_NUMBER of $owner (AUTO_PROJECT_NUMBER): GH_PROJECT_TOKEN must be a classic PAT with the project scope."
+        fi
+        exit 0
+
+    - name: Describe
+      if: ${{ steps.pr.outputs.url != '' && inputs.anthropic-api-key != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        PR_URL: ${{ steps.pr.outputs.url }}
+        PR_TYPE: ${{ steps.pr.outputs.type }}
+        # Pinned: the CLI ships near-daily. Bump deliberately.
+        CLAUDE_CODE: '@anthropic-ai/claude-code@2.1.299'
+      run: |
+        set -uo pipefail
+        base="${AUTO_BASE_BRANCH:-dev}"
+        model="${AUTO_DESCRIBE_MODEL:-claude-sonnet-5-5}"
+        args=(--model "$model")
+        # Haiku rejects the effort setting.
+        [[ "$model" == claude-haiku* ]] || args+=(--effort "${AUTO_DESCRIBE_EFFORT:-low}")
+
+        prompt="You are writing the description of a GitHub pull request: branch \`$GITHUB_REF_NAME\` (type: $PR_TYPE), which merges into \`$base\`, in the git repository in the current directory.
+
+        Read the change yourself: \`git log --reverse origin/$base..HEAD\` for the commits, \`git diff --stat origin/$base...HEAD\` and \`git diff origin/$base...HEAD\` for the diff. Read files for context only when the diff is not enough.
+
+        Then reply with a clear, concise Markdown description of what this branch does, with this structure:
+
+        ## Summary
+        One or two sentences on the goal and outcome.
+
+        ## Changes
+        A short bullet list of the notable changes. Group related edits and explain intent — do not just restate filenames.
+
+        Rules: reply with only the Markdown body — no preamble, no surrounding code fences, no top-level title. If the change is trivial, keep it brief."
+
+        # --bare: none of the branch's own Claude settings, hooks or CLAUDE.md.
+        # Read-only tools; git limited to log/diff/show; a hard cost cap.
+        out="$RUNNER_TEMP/auto-pr-claude.json"
+        if ! printf '%s\n' "$prompt" |
+          npx --yes "$CLAUDE_CODE" -p --bare --no-session-persistence --output-format json \
+            "${args[@]}" --max-budget-usd 1 \
+            --tools 'Bash,Read,Grep,Glob' \
+            --allowedTools 'Bash(git log:*),Bash(git diff:*),Bash(git show:*),Read,Grep,Glob' \
+            > "$out"; then
+          echo "::warning::Claude Code failed; the description is left as it was."
+          exit 0
+        fi
+
+        description="$RUNNER_TEMP/auto-pr-description.md"
+        jq -r 'select(.is_error | not) | .result // empty' "$out" > "$description"
+        if [ ! -s "$description" ]; then
+          echo "::warning::Claude Code returned no description ($(jq -r '.subtype // "unknown"' "$out")); the description is left as it was."
+          exit 0
+        fi
+        gh pr edit "$PR_URL" --body-file "$description" >/dev/null ||
+          echo "::warning::Could not update the description."
+
+    - name: Ready for review
+      if: ${{ !cancelled() && steps.pr.outputs.created == 'true' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        PR_URL: ${{ steps.pr.outputs.url }}
+      run: gh pr ready "$PR_URL"

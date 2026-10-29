@@ -1,0 +1,81 @@
+# =============================================================================
+# Auto PR (reusable) — the PR of every work branch, opened on its first push.
+#
+# The caller triggers this on every push to a non-main/non-dev branch. It opens
+# (or updates) the branch's PR into dev, as a draft until its type label,
+# assignee, milestone, board card and AI description are in place
+# (actions/auto-pr). No issue is created. Purely dev-side tooling: it never
+# touches builds, releases, or deployments.
+#
+# The CALLER repo's variables (`vars`, in a reusable workflow) are passed whole
+# as REPO_VARS_JSON; the action takes their AUTO_* keys. Any knob the repo
+# leaves unset is filled from config/actions.env at the same ref (shared
+# values), else its code default applies. So any repo can set or override any
+# knob — including ones added later — without touching this file.
+#
+# Secrets are passed explicitly by the caller (not `secrets: inherit`, which is
+# only guaranteed within one organization/enterprise):
+#   ANTHROPIC_API_KEY   writes the PR description (optional: without it the
+#                       commit list stays as the description)
+#   GH_PROJECT_TOKEN    classic PAT, `project` + `repo` scopes. Makes the PR's
+#                       events trigger PR Checks, and reaches a board owned by a
+#                       personal account (a fine-grained PAT cannot). Falls back
+#                       to GITHUB_TOKEN: no board, and PR Checks wait for the
+#                       next push.
+#
+# Renovate's branches (chore/renovate-*) are skipped: Renovate opens and
+# rewrites its own PR.
+#
+# Caller must grant: contents: read, pull-requests: write.
+# =============================================================================
+name: Auto PR
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner label for the job.
+        type: string
+        default: ubuntu-latest
+      base-branch:
+        description: Branch the work PR targets.
+        type: string
+        default: dev
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      GH_PROJECT_TOKEN:
+        required: false
+
+jobs:
+  auto-pr:
+    name: Open or update PR
+    # Renovate opens and rewrites its own PR on these branches (renovate/tooling.json
+    # → branchPrefix); syncing them here would overwrite its title and body.
+    if: ${{ !startsWith(github.ref_name, 'chore/renovate-') }}
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      pull-requests: write
+    # Queued, never cancelled: a run cut short could leave its new PR in draft.
+    concurrency:
+      group: auto-pr-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Same major as this workflow's: bump both together.
+      - uses: ebalzan/ci/actions/auto-pr@v4
+        with:
+          github-token: ${{ secrets.GH_PROJECT_TOKEN || github.token }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

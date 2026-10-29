@@ -32,7 +32,7 @@
 #
 # Variables vs secrets. Shared VARIABLES are not copied onto repos: the actions
 # read config/actions.env from the copy of ebalzan/ci the runner downloads for
-# `uses: …@v2` (actions/auto-work-items/src/sharedVars.ts) and fill only what
+# `uses: …@v4` (scripts/shared-vars.mjs) and fill only what
 # the repo leaves unset. So a shared variable changes by moving the major tag,
 # and only the repo's own keys are pushed — --prune deletes old shared copies.
 # Shared SECRETS cannot work that way (they are not committed), so they are
