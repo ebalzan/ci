@@ -1,0 +1,14 @@
+{
+  "$comment": "THE list of work types — the only place a type is defined. A type is at once a branch prefix (<type>/<description>), a Conventional Commit and PR-title type, and a PR label. release: the bump a commit of that type triggers (minor | patch; `!` or a BREAKING CHANGE footer makes any type major). color: its label's color (description \"Changes for '<type>' branches\"). Key order is precedence: the dev → main PR's title takes the first type among the promoted commits, so keep the minor types first. Read by commitlint.config.mjs (hook + work-PR check), scripts/release/release-utils.mjs (bumps; promote-dev-to-main.mjs through it), actions/work-pr and actions/auto-pr. This repo uses `refact`, never `refactor`.",
+  "feat": { "release": "minor", "color": "1D76DB" },
+  "fix": { "release": "patch", "color": "D73A4A" },
+  "refact": { "release": "patch", "color": "FBCA04" },
+  "perf": { "release": "patch", "color": "F9D0C4" },
+  "revert": { "release": "patch", "color": "E99695" },
+  "build": { "release": "patch", "color": "0052CC" },
+  "ci": { "release": "patch", "color": "0052CC" },
+  "docs": { "release": "patch", "color": "5319E7" },
+  "test": { "release": "patch", "color": "0E8A16" },
+  "style": { "release": "patch", "color": "C2E0C6" },
+  "chore": { "release": "patch", "color": "BFD4F2" }
+}

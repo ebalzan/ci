@@ -8,22 +8,20 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const BIN_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(BIN_DIR)
-const VALIDATOR = join(ROOT, 'managed', 'scripts', 'release', 'validate-conventional-subject.sh')
+const COMMITLINT_CONFIG = join(ROOT, 'commitlint.config.mjs')
 
 const SCRIPTS = {
   bootstrap: 'gh-bootstrap.sh',
   reset: 'gh-reset.sh',
   onboard: 'onboard.sh',
 }
-
-// Subjects git writes itself; they are not Conventional Commits and need not be.
-const GIT_GENERATED = /^(Merge |Revert "|fixup! |squash! |amend! )/
 
 const HELP = `Usage: ebalzan-ci <command> [options]
 
@@ -44,7 +42,10 @@ function version() {
 }
 
 // commit-msg FILE|SUBJECT — husky passes the path of the message file; a
-// non-path argument is checked as the subject itself (handy for scripts).
+// non-path argument is checked as the subject itself (handy for scripts). The
+// subject goes through commitlint with commitlint.config.mjs — the rule the
+// work-PR check applies to the PR title and commits. Subjects git writes itself
+// (Merge …, Revert "…", fixup! …) are let through by commitlint's defaults.
 function commitMsg(args) {
   const [arg] = args
   if (!arg || arg === '--help' || arg === '-h') {
@@ -57,8 +58,25 @@ function commitMsg(args) {
       .split(/\r?\n/)
       .find(line => line.trim() && !line.startsWith('#'))
       ?.trim() ?? ''
-  if (GIT_GENERATED.test(subject)) return 0
-  return run('sh', [VALIDATOR, subject, 'commit message'])
+  const result = spawnSync(process.execPath, [commitlintCli(), '--config', COMMITLINT_CONFIG], {
+    input: `${subject}\n`,
+    stdio: ['pipe', 'inherit', 'inherit'],
+  })
+  if (result.error) {
+    console.error(`ebalzan-ci: could not run commitlint: ${result.error.message}`)
+    return 127
+  }
+  if (result.status === 0) return 0
+  console.log(`Invalid commit message: "${subject}"`)
+  console.log('Use Conventional Commits, for example:')
+  console.log('  feat(viewer): add section filters')
+  console.log('  fix: prevent null model crash')
+  return 1
+}
+
+function commitlintCli() {
+  const require = createRequire(import.meta.url)
+  return join(dirname(require.resolve('@commitlint/cli/package.json')), 'cli.js')
 }
 
 function run(command, args) {

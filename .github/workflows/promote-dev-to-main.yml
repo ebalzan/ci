@@ -8,7 +8,7 @@
 # approval gate. Review it accordingly.
 #
 # The PR is opened ready for review and added to the same Projects (v2) board
-# as auto-work-items (AUTO_PROJECT_NUMBER / AUTO_PROJECT_OWNER), when one is
+# as auto-pr (AUTO_PROJECT_NUMBER / AUTO_PROJECT_OWNER), when one is
 # configured. It is assigned
 # to whoever pushed to dev, labelled with `release` plus the type of every
 # promoted commit, and put on the AUTO_MILESTONE_TITLE milestone (if set).

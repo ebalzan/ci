@@ -18,36 +18,38 @@ title, squash merges, and a release on every merge to `main`. Read
 
 ```bash
 git clone git@github.com:ebalzan/ci.git && cd ci
-npm ci            # TypeScript, for actions/auto-work-items
-npm run check     # build + verify dist/ + syntax-check every script
+npm ci            # commitlint (the CLI's commit-msg) and Prettier
+npm run check     # syntax-check every script
 npm test          # unit and CLI tests (no network, no GitHub account needed)
 ```
 
-Node.js ≥ 24 for development (the published CLI needs ≥ 20), bash, git, and
+Node.js ≥ 24 for development (the published CLI needs ≥ 22.12), bash, git, and
 [`gh`](https://cli.github.com) (the bootstrap tests run it, logged out).
 
 ## Layout
 
 ```text
 .github/workflows/
-  auto-work-items.yml       reusable  issue + PR + board card per work branch
-  pr-title.yml              reusable  Conventional Commit title + branch release type
+  auto-pr.yml               reusable  draft PR + label, assignee, milestone, board, AI description
+  work-pr.yml               reusable  the work-PR check: commitlint (title, commits) + Danger (metadata)
   promote-dev-to-main.yml   reusable  the evergreen dev → main PR
   release.yml               reusable  semver bump, tag, GitHub Release, sync dev; outputs tag/sha
   self-*.yml                this repo's own flow: callers of the four above, by local path
 actions/                    composite actions the reusable workflows run
-  auto-work-items/          TypeScript src/ + committed dist/ (run by actions/github-script)
-  pr-title/  promote/  release/
-scripts/release/            release-main, promote-dev-to-main, release-utils, verify-pr-release-type
-managed/                    the commit-message validator (hook + PR-title check)
+  auto-pr/                  gh + Claude Code (headless), all in action.yml
+  work-pr/                  rules.mjs (the rules) + dangerfile.mjs (Danger entry) + its own lockfile
+  promote/  release/
+scripts/shared-vars.mjs     AUTO_* loading: repo variables, then config/actions.env
+scripts/release/            release-main, promote-dev-to-main, release-utils
+commitlint.config.mjs       the Conventional Commits rule (hook + work-PR check)
 bin/
   cli.mjs                   the `ebalzan-ci` entry point
   gh-bootstrap.sh           variables, secrets, settings, rulesets → GitHub
   gh-reset.sh               delete Actions config on a repo
   onboard.sh                templates + bootstrap for a new repo
   _lib.sh  _json.mjs        shared helpers (not commands)
-config/                     the shared layer: actions.env, repo-settings.json, rulesets/,
-                            repos.env, secrets.env.example (secrets.env is gitignored)
+config/                     the shared layer: actions.env, types.json, repo-settings.json,
+                            rulesets/, repos.env, secrets.env.example (secrets.env is gitignored)
 templates/                  what `onboard` writes into a repo (__PLACEHOLDERS__)
 renovate/tooling.json       shared Renovate preset
 test/                       node:test suites
@@ -55,30 +57,32 @@ docs/                       user documentation
 ```
 
 What is published to npm is the `files` list in `package.json`: `bin/`,
-`managed/`, `templates/`, `renovate/`, `docs/` and the non-secret `config/`
-files. The workflows and actions are consumed from GitHub (`uses:`), not npm.
+`templates/`, `renovate/`, `docs/`, `commitlint.config.mjs` and the non-secret
+`config/` files. The workflows and actions are consumed from GitHub (`uses:`), not npm.
 Check with `npm pack --dry-run`.
 
 ## Checks and tests
 
 PR Checks (`self-pr-checks.yml`) runs, in parallel:
 
-| Job     | Runs                                                                                                                                                                         |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title` | The shared PR-title check, from the local workflow file.                                                                                                                     |
-| `check` | `npm run check` (build, `dist/` committed, `bash -n`, `node --check`), `npm run format:check` (Prettier with the `@ebalzan/config` rules), `npm test`, `npm pack --dry-run`. |
+| Job       | Runs                                                                                                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work-pr` | The shared work-PR check, from the local workflow file.                                                                                            |
+| `check`   | `npm run check` (`bash -n`, `node --check`), `npm run format:check` (Prettier with the `@ebalzan/config` rules), `npm test`, `npm pack --dry-run`. |
 
 The tests never touch GitHub: they use throwaway git repos and run `gh` with an
 empty config directory, so it is logged out. What they cover:
 
-| Suite                    | Covers                                                                                                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `release-utils.test.mjs` | Bump rules, breaking changes, branch types, semver.                                                                                                             |
-| `rules.test.mjs`         | The commit types agree across validator / release-utils / TYPE_CONFIG; JSON merge; shipped rulesets and settings are well-formed and cannot break `sync-dev`.   |
-| `cli.test.mjs`           | Command dispatch, `commit-msg` on subjects and message files, `--help` forwarding.                                                                              |
-| `onboard.test.mjs`       | Dry run, template rendering, Node vs non-Node repos, keep vs `--force`, refusals, `.gitignore` lines, `@ebalzan/config` wiring.                                 |
-| `bootstrap.test.mjs`     | Dry-run plans: layer labels, settings/ruleset merging, shared and per-repo secrets dirs, `--skip`.                                                              |
-| `release.test.mjs`       | `release-main.mjs` end to end against a local bare origin and a fake GitHub API: tag-only and `package.json` releases, re-runs, no-conventional-commit failure. |
+| Suite                    | Covers                                                                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `release-utils.test.mjs` | Bump rules, breaking changes, branch types, semver.                                                                                                                   |
+| `rules.test.mjs`         | `types.json` is well-formed (minor types first) and is what every reader sees; JSON merge; shipped rulesets and settings are well-formed and cannot break `sync-dev`. |
+| `work-pr.test.mjs`       | Every work-PR rule (`actions/work-pr/rules.mjs`) and warning, on plain objects.                                                                                       |
+| `shared-vars.test.mjs`   | The AUTO_* layers (job env, repo variables, `config/actions.env`) and the `$GITHUB_ENV` output.                                                                       |
+| `cli.test.mjs`           | Command dispatch, `commit-msg` on subjects and message files, `--help` forwarding.                                                                                    |
+| `onboard.test.mjs`       | Dry run, template rendering, Node vs non-Node repos, keep vs `--force`, refusals, `.gitignore` lines, `@ebalzan/config` wiring.                                       |
+| `bootstrap.test.mjs`     | Dry-run plans: layer labels, settings/ruleset merging, shared and per-repo secrets dirs, `--skip`.                                                                    |
+| `release.test.mjs`       | `release-main.mjs` end to end against a local bare origin and a fake GitHub API: tag-only and `package.json` releases, re-runs, no-conventional-commit failure.       |
 
 To try a command for real against a repo of yours, use `--dry-run` first; the
 bootstrap dry run only reads from GitHub.
@@ -88,17 +92,20 @@ bootstrap dry run only reads from GitHub.
 ```bash
 git switch dev && git pull
 git switch -c fix/your-change
-# edit; for actions/auto-work-items/src: npm run build and commit dist/ too
+# edit
 npm run check && npm test
 git commit -m "fix(release): …" && git push -u origin fix/your-change
-# The issue + PR into dev open. Squash-merge when green.
+# The PR into dev opens. Squash-merge when green.
 ```
 
 Rules worth knowing:
 
-- **The commit types live in three places** (validator regex, `release-utils`,
-  `TYPE_CONFIG`); `rules.test.mjs` fails if they disagree.
-- **`dist/` is committed** — callers run it straight from the action download.
+- **The work types live in one place**: `config/types.json` (type,
+  release bump, label color; key order = precedence). commitlint, the release
+  scripts, the work-PR check and auto-pr all read it; adding a type is one line
+  there.
+- **Action dependencies are locked** — `actions/work-pr` installs from its own
+  `package-lock.json`, commitlint from the root one (`--omit=dev`).
 - **Keep action inputs backward compatible** within a major: this repo's own
   PRs run the workflow files at the PR commit but the actions at the last
   release (below).

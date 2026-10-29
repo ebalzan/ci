@@ -4,47 +4,28 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
-import sharedVars from '../../actions/auto-work-items/dist/sharedVars.js'
-import { bumpVersion, highestRelease, normalizeSubjectLine } from './release-utils.mjs'
+import { applySharedVars } from '../shared-vars.mjs'
+import { bumpVersion, commitTypes, highestRelease, normalizeSubjectLine } from './release-utils.mjs'
 
 const BASE_BRANCH = process.env.PROMOTION_BASE || 'main'
 const HEAD_BRANCH = process.env.PROMOTION_HEAD || 'dev'
 
 // The title takes the most significant Conventional Commits type among the
-// promoted commits, so a refact-only promotion reads `refact:`, not `fix:`.
-// feat leads because it is the only minor bump; every other type is a patch, so
+// promoted commits, so a refact-only promotion reads `refact:`, not `fix:`:
+// the first one in config/types.json's order. The minor types lead, so
 // whichever wins, the title's release type still matches the computed bump (a
-// breaking change adds `!`) and passes verify-pr-release-type.
-const TITLE_TYPE_PRECEDENCE = [
-  'feat',
-  'fix',
-  'refact',
-  'perf',
-  'revert',
-  'build',
-  'ci',
-  'docs',
-  'test',
-  'style',
-  'chore',
-]
+// breaking change adds `!`).
+const TITLE_TYPE_PRECEDENCE = Object.keys(commitTypes)
 
-// Commit type → the type label auto-pr.yml puts on feature PRs. Colors and
-// descriptions match TYPE_CONFIG in actions/auto-work-items/src/config.ts
-// so neither automation rewrites the other's labels.
-const TYPE_LABELS = {
-  feat: { name: 'feat', color: '1D76DB', description: "Changes for 'feat' branches" },
-  fix: { name: 'fix', color: 'D73A4A', description: "Changes for 'fix' branches" },
-  docs: { name: 'docs', color: '5319E7', description: "Changes for 'docs' branches" },
-  style: { name: 'style', color: 'C2E0C6', description: "Changes for 'style' branches" },
-  refact: { name: 'refact', color: 'FBCA04', description: "Changes for 'refact' branches" },
-  perf: { name: 'perf', color: 'F9D0C4', description: "Changes for 'perf' branches" },
-  test: { name: 'test', color: '0E8A16', description: "Changes for 'test' branches" },
-  build: { name: 'build', color: '0052CC', description: "Changes for 'build' branches" },
-  ci: { name: 'ci', color: '0052CC', description: "Changes for 'ci' branches" },
-  chore: { name: 'chore', color: 'BFD4F2', description: "Changes for 'chore' branches" },
-  revert: { name: 'revert', color: 'E99695', description: "Changes for 'revert' branches" },
-}
+// Commit type → the type label auto-pr.yml puts on work PRs: the same name,
+// color and description (config/types.json), so neither automation
+// rewrites the other's labels.
+const TYPE_LABELS = Object.fromEntries(
+  Object.entries(commitTypes).map(([type, { color }]) => [
+    type,
+    { name: type, color, description: `Changes for '${type}' branches` },
+  ]),
+)
 
 const RELEASE_LABEL = {
   name: 'release',
@@ -294,8 +275,8 @@ function buildBody({ nextTag, releaseType, commits }) {
 
 async function main() {
   // AUTO_* from the caller repo's variables (REPO_VARS_JSON), the rest from
-  // config/actions.env — the same loader auto-work-items uses.
-  sharedVars.applySharedVars({ core: { info: log, warning: log }, env: process.env })
+  // config/actions.env — the same loader the auto-pr and work-pr actions use.
+  applySharedVars({ core: { info: log, warning: log }, env: process.env })
 
   const { owner, repo } = parseRepositorySlug(process.env.GITHUB_REPOSITORY)
 

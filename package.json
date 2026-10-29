@@ -1,13 +1,15 @@
 {
   "name": "@ebalzan/ci",
   "version": "3.0.2",
-  "description": "One set of CI/CD rules for all your GitHub repos: reusable workflows (Conventional Commits, auto issue/PR, semver releases), a CLI that syncs Actions config, repo settings and branch rulesets, and a commit-msg hook.",
+  "description": "One set of CI/CD rules for all your GitHub repos: reusable workflows (auto PR with AI description, work-PR checks, semver releases), a CLI that syncs Actions config, repo settings and branch rulesets, and a commitlint commit-msg hook.",
   "keywords": [
     "github-actions",
     "reusable-workflows",
     "ci",
     "cd",
     "conventional-commits",
+    "commitlint",
+    "danger",
     "semantic-release",
     "semver",
     "rulesets",
@@ -32,36 +34,37 @@
   },
   "files": [
     "bin/",
-    "managed/",
     "templates/",
     "renovate/",
     "docs/",
+    "commitlint.config.mjs",
     "config/actions.env",
+    "config/types.json",
     "config/repos.env",
     "config/repo-settings.json",
     "config/rulesets/",
     "config/secrets.env.example"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p actions/auto-work-items/tsconfig.json",
-    "check": "npm run build && git diff --exit-code -- actions/auto-work-items/dist && bash -n bin/*.sh managed/scripts/release/*.sh && node --check bin/cli.mjs && node --check bin/_json.mjs && node --check scripts/release/*.mjs",
+    "check": "bash -n bin/*.sh && for f in bin/*.mjs scripts/*.mjs scripts/release/*.mjs actions/work-pr/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
     "test": "node --test 'test/*.test.mjs'",
     "gh:bootstrap": "bash bin/gh-bootstrap.sh",
     "gh:reset": "bash bin/gh-reset.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
+  "dependencies": {
+    "@commitlint/cli": "21.2.3"
+  },
   "devDependencies": {
     "@ebalzan/config": "0.1.0",
-    "@types/node": "25.6.2",
-    "prettier": "3.9.10",
-    "typescript": "6.0.3"
+    "prettier": "3.9.10"
   },
   "prettier": "@ebalzan/config/prettier"
 }

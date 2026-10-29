@@ -21,7 +21,7 @@
 #   7. tags the repo with REPOS_TOPIC (config/repos.env), so `--all` finds it;
 #   8. runs the bootstrap (variables, secrets, settings, rulesets);
 #   9. pushes the branch. The auto-pr.yml it adds runs on that very push and
-#      opens the tracking issue and the PR into dev. Review and squash-merge it.
+#      opens the PR into dev. Review and squash-merge it.
 #
 # Usage:
 #   ebalzan-ci onboard [options]          # the repo in the current directory

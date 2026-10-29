@@ -1,19 +1,17 @@
-// Accepted branch prefixes. Keep in sync with TYPE_CONFIG in
-// actions/auto-work-items/src/config.ts and the managed validator
-// (managed/scripts/release/validate-conventional-subject.sh).
-const branchReleaseTypes = new Map([
-  ['feat', 'minor'],
-  ['fix', 'patch'],
-  ['docs', 'patch'],
-  ['style', 'patch'],
-  ['refact', 'patch'],
-  ['perf', 'patch'],
-  ['test', 'patch'],
-  ['build', 'patch'],
-  ['ci', 'patch'],
-  ['chore', 'patch'],
-  ['revert', 'patch'],
-])
+import { readFileSync } from 'node:fs'
+
+// The work types, from THE list (config/types.json): type → { release,
+// color }, in precedence order. Nothing else defines a type.
+const commitTypes = Object.fromEntries(
+  Object.entries(
+    JSON.parse(readFileSync(new URL('../../config/types.json', import.meta.url), 'utf8')),
+  ).filter(([key]) => !key.startsWith('$')),
+)
+
+// Accepted branch prefixes and the release each one implies.
+const branchReleaseTypes = new Map(
+  Object.entries(commitTypes).map(([type, { release }]) => [type, release]),
+)
 
 const supportedBranchTypes = Array.from(branchReleaseTypes.keys())
 
@@ -55,19 +53,7 @@ function analyzeConventionalMessage(message) {
     return { release: 'major', subject }
   }
 
-  if (type === 'feat') {
-    return { release: 'minor', subject }
-  }
-
-  if (
-    ['fix', 'perf', 'docs', 'style', 'refact', 'test', 'build', 'ci', 'chore', 'revert'].includes(
-      type,
-    )
-  ) {
-    return { release: 'patch', subject }
-  }
-
-  return { release: 'none', subject }
+  return { release: branchReleaseTypes.get(type) ?? 'none', subject }
 }
 
 // Returns the strongest release type implied by a list of commit messages.
@@ -131,6 +117,7 @@ export {
   analyzeConventionalMessage,
   branchReleaseTypes,
   bumpVersion,
+  commitTypes,
   highestRelease,
   normalizeSubjectLine,
   promotionBranches,

@@ -1,0 +1,76 @@
+# The work-PR check: what a feat/fix/… PR into dev must look like before it is
+# squash-merged. Three steps, each reported on its own in the job log; all three
+# run even when one fails, so one push shows everything to fix:
+#
+#   Conventional title    commitlint on the PR title — it becomes the squash
+#                         commit that drives the release.
+#   Conventional commits  commitlint on every commit of the PR — the squash
+#                         commit's body lists them (repo setting
+#                         squash_merge_commit_message = COMMIT_MESSAGES).
+#   PR metadata           Danger (dangerfile.mjs → rules.mjs): base branch, branch
+#                         name, title type = branch type, type label, assignee,
+#                         author, milestone, project board, description; plus
+#                         warnings (size, major release, behind base). Posts one
+#                         PR comment listing them, removed once all pass.
+#
+# Renovate's PRs (chore/renovate-*) get the two commitlint steps only: Renovate
+# opens and rewrites them itself, with no board, milestone or AI description.
+#
+# Needs a full-history checkout of the PR head, Node, and the job env
+# REPO_VARS_JSON (the caller's `vars`) + AUTO_BASE_BRANCH. Called by
+# .github/workflows/work-pr.yml.
+name: Work PR
+description: Validate a feat/fix/… PR into dev — title, commits and PR metadata.
+inputs:
+  github-token:
+    description: Token for Danger's PR comment (pull-requests write).
+    default: ${{ github.token }}
+  project-token:
+    description: Token that can read the Projects (v2) board — a classic PAT with the project scope for a board owned by a personal account. Defaults to github-token.
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Install commitlint and Danger
+      id: install
+      shell: bash
+      run: |
+        npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+        npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
+        node "$GITHUB_ACTION_PATH/../../scripts/shared-vars.mjs"
+
+    - name: Conventional title
+      if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      shell: bash
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+      run: |
+        ci_root="$GITHUB_ACTION_PATH/../.."
+        printf '%s\n' "$PR_TITLE" |
+          "$ci_root/node_modules/.bin/commitlint" --config "$ci_root/commitlint.config.mjs"
+
+    - name: Conventional commits
+      if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        ci_root="$GITHUB_ACTION_PATH/../.."
+        "$ci_root/node_modules/.bin/commitlint" --config "$ci_root/commitlint.config.mjs" \
+          --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+
+    - name: PR metadata
+      if: ${{ !cancelled() && steps.install.outcome == 'success' && !startsWith(github.event.pull_request.head.ref, 'chore/renovate-') }}
+      shell: bash
+      env:
+        DANGER_GITHUB_API_TOKEN: ${{ inputs.github-token }}
+        PROJECT_TOKEN: ${{ inputs.project-token || inputs.github-token }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+      run: |
+        BEHIND_BY="$(git rev-list --count "$HEAD_SHA..origin/$BASE_REF" 2>/dev/null || echo 0)"
+        export BEHIND_BY
+        "$GITHUB_ACTION_PATH/node_modules/.bin/danger" ci \
+          --dangerfile "$GITHUB_ACTION_PATH/dangerfile.mjs" \
+          --id work-pr --failOnErrors --no-publish-check
