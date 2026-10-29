@@ -130,8 +130,8 @@ file so the repo keeps only what is really its own.
 **Shared variables are read at run time.** In a reusable workflow `vars` are
 the caller repo's — but `config/actions.env` is committed, and the runner
 downloads the whole of ebalzan/ci for `uses: ebalzan/ci/actions/…@v2`. So the
-actions (`actions/auto-work-items/src/sharedVars.ts`, also used by
-`scripts/release/promote-dev-to-main.mjs`) load that file and fill every key
+actions (`scripts/shared-vars.mjs`, run by `actions/auto-pr` and
+`actions/pr-check`) load that file and fill every key
 the repo leaves unset. Consequences:
 
 - A shared variable changes when it is released and **the major tag moves** —
@@ -172,7 +172,7 @@ timers on private repos for GitHub Enterprise; check the current plan matrix
 before relying on them. Environments themselves (and their secrets) were
 verified working on private free-plan repos.
 
-Without required reviewers, **merging the `dev → main` promotion PR is the
+Without required reviewers, **merging the `dev → main` release PR is the
 deploy approval**: review it as the approval it is.
 
 ---

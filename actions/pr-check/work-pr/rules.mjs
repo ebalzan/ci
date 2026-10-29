@@ -1,29 +1,11 @@
 // The work-PR rules: what a feat/fix/… PR into dev must look like before it is
-// squash-merged. Pure — no GitHub calls — so test/work-pr.test.mjs runs them on
-// plain objects; dangerfile.mjs gathers the PR's data and reports the result.
-// The title and commit FORMAT is commitlint's job (the steps before Danger);
-// these rules cover what commitlint cannot see.
+// squash-merged — on top of what every PR needs (../rules.mjs).
 
-import { types } from '../../commitlint.config.mjs'
+import { types } from '../../../commitlint.config.mjs'
+import { TITLE_PATTERN, checkTracking, code } from '../rules.mjs'
 
-const TITLE_PATTERN = /^(\w+)(?:\([^)]+\))?(!)?: \S/
 const BREAKING_FOOTER = /^BREAKING[ -]CHANGE:/m
 const ALLOWED_AUTHORS = ['OWNER', 'MEMBER', 'COLLABORATOR']
-const DEFAULT_MAX_CHANGED_LINES = 500
-
-// The AUTO_* knobs the rules read (repo variables over config/actions.env).
-export function workPrConfig(env) {
-  const maxChangedLines = Number.parseInt(env.AUTO_MAX_CHANGED_LINES ?? '', 10)
-  return {
-    baseBranch: (env.AUTO_BASE_BRANCH || 'dev').trim(),
-    milestoneTitle: (env.AUTO_MILESTONE_TITLE || '').trim(),
-    projectNumber: Number.parseInt(env.AUTO_PROJECT_NUMBER ?? '', 10) || 0,
-    projectOwner: (env.AUTO_PROJECT_OWNER || '').trim(),
-    maxChangedLines: maxChangedLines > 0 ? maxChangedLines : DEFAULT_MAX_CHANGED_LINES,
-  }
-}
-
-const code = value => `\`${value}\``
 
 /**
  * @param pr              { title, body, head, base, authorAssociation, assignees: string[],
@@ -32,7 +14,7 @@ const code = value => `\`${value}\``
  * @param projects        [{ owner, number }] the PR is on (read only when a board is set)
  * @param projectsError   why `projects` could not be read, if it could not
  * @param behindBy        commits on the base branch that the head does not have
- * @param config          workPrConfig(), with projectOwner defaulted to the repo owner
+ * @param config          prConfig(), with projectOwner defaulted to the repo owner
  * @returns {{ fails: string[], warnings: string[] }}
  */
 export function checkWorkPr({
@@ -82,10 +64,6 @@ export function checkWorkPr({
     )
   }
 
-  if (pr.assignees.length === 0) {
-    fails.push('Assign the PR to whoever is responsible for it.')
-  }
-
   if (!ALLOWED_AUTHORS.includes(pr.authorAssociation)) {
     fails.push(
       'Work PRs are opened by the repo owner, members and collaborators only ' +
@@ -93,34 +71,7 @@ export function checkWorkPr({
     )
   }
 
-  if (
-    config.milestoneTitle &&
-    (pr.milestone ?? '').trim().toLowerCase() !== config.milestoneTitle.toLowerCase()
-  ) {
-    fails.push(
-      `Set the milestone to ${code(config.milestoneTitle)} (AUTO_MILESTONE_TITLE)` +
-        (pr.milestone ? `, not ${code(pr.milestone)}.` : '.'),
-    )
-  }
-
-  if (config.projectNumber) {
-    const board = `project #${config.projectNumber} of ${code(config.projectOwner)}`
-    if (projectsError) {
-      fails.push(`Could not check that the PR is on ${board}: ${projectsError}`)
-    } else if (
-      !projects.some(
-        project =>
-          project.number === config.projectNumber &&
-          project.owner.toLowerCase() === config.projectOwner.toLowerCase(),
-      )
-    ) {
-      fails.push(`Add the PR to ${board} (AUTO_PROJECT_NUMBER).`)
-    }
-  }
-
-  if (!(pr.body ?? '').replace(/<!--[\s\S]*?-->/g, '').trim()) {
-    fails.push('Describe the change in the PR description.')
-  }
+  fails.push(...checkTracking({ pr, projects, projectsError, config }))
 
   if (pr.changedLines > config.maxChangedLines) {
     warnings.push(

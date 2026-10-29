@@ -1,36 +1,47 @@
-# Opens or updates the PR of the pushed work branch (<type>/<description>) into
-# the base branch (dev). No issue is created.
+# Opens or updates the PR of the pushed branch. Two kinds, by the branch:
 #
-#   1. Load variables   the caller's AUTO_* vars, then config/actions.env.
-#   2. Find or open PR  the branch's open PR, or a new DRAFT one: title = the
-#                       first commit whose type is the branch's (else
-#                       "<type>: <description>"), body = the commit list.
-#                       find-or-open-pr.sh.
-#   3. Sync metadata    type label (created when missing, with its color from
-#                       config/types.json), the pusher as assignee,
-#                       AUTO_MILESTONE_TITLE, the AUTO_PROJECT_NUMBER board. Each
-#                       is best-effort: a failure is a warning, and the work-PR
-#                       check then names what is missing.
-#                       sync-metadata.sh.
-#   4. Describe         Claude Code, headless, reads the branch with git and
+#   work PR     a work branch (<type>/<description>) → AUTO_BASE_BRANCH (dev).
+#               No issue is created.
+#   release PR  AUTO_BASE_BRANCH (dev) → AUTO_RELEASE_BRANCH (main), titled
+#               `<type>[!]: release vX.Y.Z` after the release merging it cuts.
+#
+#   1. Load variables   the caller's AUTO_* vars, then config/actions.env; the
+#                       PR kind.
+#   2. Install git-cliff release PR only: the root package (git-cliff).
+#   3. Find or open PR  the branch's open PR, or a new DRAFT one.
+#                       Work PR (work-pr.sh): title = the first commit whose
+#                       type is the branch's (else "<type>: <description>"),
+#                       body = the commit list; neither is touched afterwards.
+#                       Release PR (release-pr.sh): title from
+#                       scripts/release-title.mjs, body = the git-cliff
+#                       changelog; both follow every push to dev.
+#   4. Sync metadata    the label (type label, or `release`; created when
+#                       missing), the pusher as assignee, AUTO_MILESTONE_TITLE,
+#                       the AUTO_PROJECT_NUMBER board. Each is best-effort: a
+#                       failure is a warning, and the PR check then names what
+#                       is missing. sync-metadata.sh.
+#   5. Describe         Claude Code, headless, reads the branch with git and
 #                       writes the description (AUTO_DESCRIBE_MODEL /
-#                       AUTO_DESCRIBE_EFFORT). On every push, so it follows the
-#                       work; skipped without an Anthropic API key.
-#                       describe.sh, with the prompt in describe-prompt.md.
-#   5. Ready for review only for a PR this run opened: it leaves draft once the
-#                       rest is done, so the work-PR check (which skips drafts)
-#                       first runs on the finished PR.
+#                       AUTO_DESCRIBE_EFFORT) — above the changelog on the
+#                       release PR. On every push, so it follows the work;
+#                       skipped without an Anthropic API key. describe.sh, with
+#                       the prompt in describe-prompt.md or
+#                       describe-release-prompt.md.
+#   6. Ready for review only for a PR this run opened: it leaves draft once the
+#                       rest is done, so the PR check (which skips drafts) first
+#                       runs on the finished PR.
 #
-# Needs a full-history checkout of the pushed branch, Node >= 22, and the job
-# env AUTO_BASE_BRANCH + REPO_VARS_JSON. Called by .github/workflows/auto-pr.yml.
+# Needs a full-history checkout of the pushed branch (with tags, for the release
+# PR), Node >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH +
+# REPO_VARS_JSON. Called by .github/workflows/auto-pr.yml.
 name: Auto PR
-description: Open or update the PR of a work branch, with type label, assignee, milestone, board and an AI description.
+description: Open or update the PR of a work branch, or the release PR of dev, with label, assignee, milestone, board and an AI description.
 inputs:
   github-token:
     description: Token for gh. A classic PAT (`repo` + `project`) lets the PR trigger PR Checks and reach a board owned by a personal account.
     required: true
   anthropic-api-key:
-    description: Anthropic API key for the description. Empty keeps the commit list as the description.
+    description: Anthropic API key for the description. Empty keeps the commit list (work PR) or the changelog (release PR) as the description.
     default: ''
 outputs:
   url:
@@ -40,8 +51,17 @@ runs:
   using: composite
   steps:
     - name: Load variables
+      id: vars
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/../../scripts/shared-vars.mjs"
+      run: |
+        node "$GITHUB_ACTION_PATH/../../scripts/shared-vars.mjs"
+        if [ "$GITHUB_REF_NAME" = "${AUTO_BASE_BRANCH:-dev}" ]; then kind=release; else kind=work; fi
+        echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+    - name: Install git-cliff
+      if: ${{ steps.vars.outputs.kind == 'release' }}
+      shell: bash
+      run: npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
 
     - name: Find or open PR
       id: pr
@@ -49,7 +69,8 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         GH_REPO: ${{ github.repository }}
-      run: bash "$GITHUB_ACTION_PATH/find-or-open-pr.sh"
+        DESCRIBE: ${{ inputs.anthropic-api-key != '' }}
+      run: bash "$GITHUB_ACTION_PATH/${{ steps.vars.outputs.kind }}-pr.sh"
 
     - name: Sync metadata
       if: ${{ steps.pr.outputs.url != '' }}
@@ -58,7 +79,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         GH_REPO: ${{ github.repository }}
         PR_URL: ${{ steps.pr.outputs.url }}
-        PR_TYPE: ${{ steps.pr.outputs.type }}
+        PR_LABEL: ${{ steps.pr.outputs.label }}
       run: bash "$GITHUB_ACTION_PATH/sync-metadata.sh"
 
     - name: Describe
@@ -69,7 +90,9 @@ runs:
         GH_REPO: ${{ github.repository }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         PR_URL: ${{ steps.pr.outputs.url }}
-        PR_TYPE: ${{ steps.pr.outputs.type }}
+        PR_KIND: ${{ steps.vars.outputs.kind }}
+        PR_LABEL: ${{ steps.pr.outputs.label }}
+        CHANGELOG: ${{ steps.pr.outputs.changelog }}
         # Pinned: the CLI ships near-daily. Bump deliberately.
         CLAUDE_CODE: '@anthropic-ai/claude-code@2.1.299'
       run: bash "$GITHUB_ACTION_PATH/describe.sh"

@@ -1,11 +1,11 @@
 // The one Conventional Commits rule (commitlint), used by the husky commit-msg
-// hook (`ebalzan-ci commit-msg`) and by the work-PR check on the PR title and
-// every commit of the PR (actions/work-pr). The types come from
+// hook (`ebalzan-ci commit-msg`) and by the PR check on the PR title and
+// every commit of the PR (actions/pr-check). The types come from
 // config/types.json.
 //
 // Deliberately no @commitlint/config-conventional: only the header shape is
 // enforced — `<type>(<scope>)!: <subject>`, scope and `!` optional — as the
-// release scan (scripts/release/release-utils.mjs) reads it. Git's own subjects
+// release PR's version and title read it (config/cliff.toml, scripts/release-title.mjs). Git's own subjects
 // (Merge …, Revert "…", fixup! …) are ignored by commitlint's defaults.
 
 import { readFileSync } from 'node:fs'

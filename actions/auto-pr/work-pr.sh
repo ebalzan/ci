@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# find-or-open-pr.sh — the "Find or open PR" step of actions/auto-pr.
+# work-pr.sh — the "Find or open PR" step of actions/auto-pr on a work branch.
 #
 # Checks the branch is <type>/<description>, then finds its open PR or opens a
 # DRAFT one into AUTO_BASE_BRANCH (default: dev). Writes to GITHUB_OUTPUT:
-#   type     the branch's type
+#   label    the branch's type, the PR's label
 #   url      the PR's URL; not set when the branch has nothing to merge yet
 #   created  true when this run opened the PR
 #
@@ -22,7 +22,7 @@ if [[ "$branch" != */?* ]] ||
   echo "::error::Branch '$branch' is not <type>/<description> with a type of: $types. Rename it."
   exit 1
 fi
-echo "type=$type" >> "$GITHUB_OUTPUT"
+echo "label=$type" >> "$GITHUB_OUTPUT"
 
 if [ "$(git rev-list --count "origin/$base..HEAD")" -eq 0 ]; then
   echo "::notice::'$branch' has no commits that are not on '$base' yet; no PR to open."

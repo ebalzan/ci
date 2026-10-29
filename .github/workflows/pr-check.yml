@@ -1,0 +1,108 @@
+# =============================================================================
+# PR Check (reusable) — the check every PR must pass before it is squash-merged
+# (actions/pr-check). One job per PR kind; the other one is skipped:
+#
+#   Work PR     feat/fix/… → dev. The title and every commit are Conventional
+#               Commits (commitlint); the PR's data (Danger): base is dev,
+#               branch is <type>/<description>, title type = branch type,
+#               exactly that type label, an assignee, an author who is the
+#               owner/a member/a collaborator, the AUTO_MILESTONE_TITLE
+#               milestone and the AUTO_PROJECT_NUMBER board when set, a
+#               description.
+#   Release PR  dev → main. The same commitlint steps; the PR's data: base is
+#               main, the title is exactly `<type>[!]: release vX.Y.Z` as
+#               computed from dev's unreleased commits (scripts/release-title.mjs,
+#               git-cliff), the `release` label, an assignee, the milestone and
+#               board when set, a description, and dev is not behind main.
+#
+# Drafts are skipped too (the check runs once the PR is marked ready). A skipped
+# job counts as passed for a required check, so both `pr-check / Work PR` and
+# `pr-check / Release PR` can be required on main and dev alike.
+#
+# Call it from a job named `pr-check` so the checks are reported under the
+# names the shared rulesets (config/rulesets/) require. The repo's own
+# build/test jobs stay next to the call in its pr-checks.yml.
+#
+# GH_PROJECT_TOKEN (classic PAT, `project` scope) is needed only to check the
+# board when it is owned by a personal account; fork PRs never receive it.
+#
+# Caller must grant: contents: read, pull-requests: write (Danger's comment).
+# =============================================================================
+name: PR Check
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner label for the jobs.
+        type: string
+        default: ubuntu-latest
+      base-branch:
+        description: Branch work PRs target; the PR whose head is this branch is the release PR.
+        type: string
+        default: dev
+      release-branch:
+        description: Branch the release PR targets.
+        type: string
+        default: main
+    secrets:
+      GH_PROJECT_TOKEN:
+        required: false
+
+jobs:
+  work-pr:
+    name: Work PR
+    if: ${{ github.event.pull_request.head.ref != inputs.base-branch && !github.event.pull_request.draft }}
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      AUTO_RELEASE_BRANCH: ${{ inputs.release-branch }}
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Same major as this workflow's: bump both together.
+      - uses: ebalzan/ci/actions/pr-check@v4
+        with:
+          kind: work
+          project-token: ${{ secrets.GH_PROJECT_TOKEN }}
+
+  release-pr:
+    name: Release PR
+    if: ${{ github.event.pull_request.head.ref == inputs.base-branch && !github.event.pull_request.draft }}
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      AUTO_RELEASE_BRANCH: ${{ inputs.release-branch }}
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
+    steps:
+      # Full history with the tags: git-cliff computes the version from them.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Same major as this workflow's: bump both together.
+      - uses: ebalzan/ci/actions/pr-check@v4
+        with:
+          kind: release
+          project-token: ${{ secrets.GH_PROJECT_TOKEN }}

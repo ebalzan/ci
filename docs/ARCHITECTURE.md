@@ -5,7 +5,7 @@ repo, which parts each repo writes itself (tests, deploys), and where each
 piece of code runs. Read it once before onboarding your second repo.
 
 - [1. The model in one picture](#1-the-model-in-one-picture)
-- [2. The four stages: shared or yours?](#2-the-four-stages-shared-or-yours)
+- [2. The two stages: shared or yours?](#2-the-two-stages-shared-or-yours)
 - [3. What actually runs, stage by stage](#3-what-actually-runs-stage-by-stage)
 - [4. Deploys are yours](#4-deploys-are-yours)
 - [5. The files a repo needs](#5-the-files-a-repo-needs)
@@ -24,9 +24,9 @@ Everything reaches a repo in one of three ways:
 ```text
                         ebalzan/ci                                   a repo (my-api)
   ┌──────────────────────────────────────────┐          ┌──────────────────────────────────────┐
-  │ PULLED at run time — automatic           │  uses:   │ 4 caller files (identical shape)     │
-  │   reusable workflows, actions, scripts,  │◀─────────│   auto-pr.yml   promote-dev-to-main  │
-  │   commit validator, config/actions.env,  │  @v2     │   pr-checks.yml release.yml          │
+  │ PULLED at run time — automatic           │  uses:   │ 2 caller files (identical shape)     │
+  │   reusable workflows, actions, scripts,  │◀─────────│   auto-pr.yml   pr-checks.yml        │
+  │   commit validator, config/actions.env,  │  @v4     │                                      │
   │   renovate preset                        │          │                                      │
   ├──────────────────────────────────────────┤          │ YOURS — the repo writes them         │
   │ PUSHED by a command — `bootstrap`        │─────────▶│   build/test jobs, deploy, its vars  │
@@ -47,28 +47,28 @@ bootstrap` writes them, and that is the only reason ebalzan/ci keeps a list
   they act on.
 
 A consequence: **ebalzan/ci cannot make a repo use it.** GitHub only runs
-workflow files that are in the repo, so each repo needs its four small caller
+workflow files that are in the repo, so each repo needs its two small caller
 files. `onboard` writes them once. After that, they almost never change: a new
 caller is only needed when ebalzan/ci releases a new major version.
 
 ---
 
-## 2. The four stages: shared or yours?
+## 2. The two stages: shared or yours?
 
 Each stage has a **caller** in the repo (the trigger, the permissions, a
-`uses:` line) and an **implementation** in ebalzan/ci. Two of the four callers
-are identical in every repo. The other two are half shared, half yours.
+`uses:` line) and an **implementation** in ebalzan/ci. One of the two callers
+is identical in every repo. The other is half shared, half yours.
 
-| Stage      | Caller in the repo                          | Implementation in ebalzan/ci                    | Identical in every repo?                                           |
-| ---------- | ------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| Work items | `.github/workflows/auto-pr.yml`             | `.github/workflows/auto-work-items.yml`         | **Yes.** Only `runs-on` may differ.                                |
-| PR checks  | `.github/workflows/pr-checks.yml`           | `.github/workflows/pr-title.yml` (job `title`)  | **The `title` job, yes.** Build, lint and test jobs are **yours**. |
-| Promotion  | `.github/workflows/promote-dev-to-main.yml` | `.github/workflows/promote-dev-to-main.yml`     | **Yes.** Only `runs-on` may differ.                                |
-| Release    | `.github/workflows/release.yml`             | `.github/workflows/release.yml` (job `release`) | **The `release` job, yes.** Deploy jobs are **yours**.             |
+| Stage     | Caller in the repo                | Implementation in ebalzan/ci                      | Identical in every repo?                                              |
+| --------- | --------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| Auto PR   | `.github/workflows/auto-pr.yml`   | `.github/workflows/auto-pr.yml`                   | **Yes.** Only `runs-on` may differ.                                   |
+| PR checks | `.github/workflows/pr-checks.yml` | `.github/workflows/pr-check.yml` (job `pr-check`) | **The `pr-check` job, yes.** Build, lint and test jobs are **yours**. |
 
-`auto-pr.yml` and `auto-work-items.yml` are the same feature: the first is the
-repo's trigger, the second is the shared logic it calls. The same is true of
-the two files named `promote-dev-to-main.yml` and the two named `release.yml`.
+The two files named `auto-pr.yml` are the same feature: the first is the repo's
+trigger, the second is the shared logic it calls. Auto PR covers both kinds of
+PR — a work branch's PR into `dev`, and the release PR `dev → main` — and the
+PR check checks both. Tagging the release and deploying are not shared stages
+yet: merging the release PR is where the shared flow ends.
 
 Why PR checks and deploys stay in the repo: a Node API with a database needs
 a generated client and placeholder env before its tests run; a frontend builds
@@ -76,7 +76,7 @@ with a framework CLI; a Go service runs `go test`; one repo ships a container
 to a VM, another to Vercel, another to npm. Putting all of that behind one
 shared workflow would turn it into a pile of `if:`s and inputs that every repo
 pays for. The shared part is what is **really** the same: the title rule, the
-versioning, the promotion and the release. [§8](#8-design-decisions) covers
+versioning, the release PR and the release. [§8](#8-design-decisions) covers
 when to move something into ebalzan/ci.
 
 ---
@@ -94,68 +94,45 @@ How a `uses:` line becomes code on the runner:
   `config/actions.env` from `${{ github.action_path }}/../..`.
 - The caller repo is only checked out where a stage needs its files.
 
-### Work items: `auto-pr.yml` → `auto-work-items.yml`
+### Auto PR: `auto-pr.yml` → `auto-pr.yml`
 
 ```text
-push to feat/x
+push to feat/x, or to dev
 └─ auto-pr.yml (repo)                       trigger, permissions, secrets
-   └─ auto-work-items.yml (ci)              job env: AUTO_BASE_BRANCH, REPO_VARS_JSON = toJSON(vars)
-      └─ actions/auto-work-items (ci)       composite: actions/github-script runs dist/index.js
-         └─ src/index.ts                    orchestrates, all through the GitHub API (no checkout)
-            ├─ sharedVars.ts                repo vars (AUTO_*) + config/actions.env → env
-            ├─ config.ts                    branch type → title, labels, priority, size, estimate
-            ├─ labels.ts  milestone.ts      create/sync labels; resolve milestone
-            ├─ describe.ts                  branch commits + diff → Claude → issue/PR body
-            ├─ issue.ts  pr.ts  assignee.ts upsert issue, PR into dev, assignee
-            └─ project.ts                   board card + fields (skipped without AUTO_PROJECT_NUMBER)
+   └─ auto-pr.yml (ci)                      full-history checkout, Node 24; job env: AUTO_BASE_BRANCH,
+      │                                     AUTO_RELEASE_BRANCH, REPO_VARS_JSON = toJSON(vars)
+      └─ actions/auto-pr (ci)               composite, one script per step
+         ├─ scripts/shared-vars.mjs         repo vars (AUTO_*) + config/actions.env → env; the PR kind
+         ├─ work-pr.sh                      feat/x: find or open the draft PR into dev (gh)
+         ├─ release-pr.sh                   dev: find or open the release PR into main; title from
+         │                                  scripts/release-title.mjs, body from git-cliff (config/cliff.toml)
+         ├─ sync-metadata.sh                label (type / release), assignee, milestone, board (best effort)
+         ├─ describe.sh                     Claude Code (headless) reads the branch → description
+         └─ gh pr ready                     a PR this run opened leaves draft
 ```
 
-### PR checks: `pr-checks.yml` → `pr-title.yml` + your jobs
+### PR checks: `pr-checks.yml` → `pr-check.yml` + your jobs
 
 ```text
 PR into dev or main
 └─ pr-checks.yml (repo)
-   ├─ job title → pr-title.yml (ci)
-   │  ├─ sparse checkout of the repo (only to compare old validator copies)
-   │  └─ actions/pr-title (ci)
-   │     ├─ managed/scripts/release/validate-conventional-subject.sh   title is a Conventional Commit
-   │     ├─ scripts/release/verify-pr-release-type.mjs                 title type matches branch type
-   │     └─ drift check of local copies of managed/ files (deprecated copies only)
+   ├─ job pr-check → pr-check.yml (ci)      full-history checkout of the PR head, Node 24
+   │  ├─ job Work PR    (head ≠ dev)  ─┐
+   │  └─ job Release PR (head = dev)  ─┴─ actions/pr-check (ci), kind work | release
+   │     ├─ commitlint                      title and every commit
+   │     └─ Danger: dangerfile.mjs          PR data → work-pr/rules.mjs or release-pr/rules.mjs,
+   │                                        both on rules.mjs (what every PR needs); the release
+   │                                        PR's title is recomputed (scripts/release-title.mjs)
    └─ your jobs (repo) — checkout, install, lint, typecheck, test, build, image build…
-```
-
-### Promotion: `promote-dev-to-main.yml` → `promote-dev-to-main.yml`
-
-```text
-push to dev
-└─ promote-dev-to-main.yml (repo)
-   └─ promote-dev-to-main.yml (ci)          checkout of the repo (for package.json), Node 24
-      └─ actions/promote (ci)
-         └─ scripts/release/promote-dev-to-main.mjs
-            ├─ compare main...dev, compute the bump (release-utils.mjs)
-            ├─ open/update the single dev → main PR, title "feat: promote dev to main (vX.Y.Z)"
-            └─ labels, assignee, milestone, board (best effort)
-```
-
-### Release: `release.yml` → `release.yml` + your deploy
-
-```text
-push to main
-└─ release.yml (repo)
-   ├─ job release → release.yml (ci)
-   │  ├─ job release: full-history checkout, Node 24, git identity
-   │  │  └─ actions/release (ci) → scripts/release/release-main.mjs
-   │  │     ├─ next version from the commits since the last vX.Y.Z tag
-   │  │     ├─ package.json? bump + "chore(release): X.Y.Z" commit : tag only
-   │  │     ├─ tag vX.Y.Z, push, GitHub Release
-   │  │     └─ outputs: tag, sha
-   │  └─ job sync-dev: force-point dev at the release commit (inline shell)
-   └─ your deploy jobs (repo), on needs.release.outputs.tag
 ```
 
 ---
 
 ## 4. Deploys are yours
+
+> **Not wired in this version.** There is no shared release stage yet, so
+> nothing produces the outputs below; this section is the contract it had, kept
+> for when it returns.
 
 The release stage ends with two outputs, and that is the whole contract:
 
@@ -245,27 +222,25 @@ Two other kinds of repo-specific job follow the same pattern: **PR previews**
 
 ## 5. The files a repo needs
 
-| File                                                              | Needed when                                                  | Same in every repo?            | Written by                                                  |
-| ----------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------ | ----------------------------------------------------------- |
-| `.github/workflows/auto-pr.yml`                                   | always                                                       | yes (`runs-on` aside)          | `onboard`                                                   |
-| `.github/workflows/promote-dev-to-main.yml`                       | always                                                       | yes (`runs-on` aside)          | `onboard`                                                   |
-| `.github/workflows/pr-checks.yml`                                 | always                                                       | `title` job yes; other jobs no | `onboard`, then you                                         |
-| `.github/workflows/release.yml`                                   | always                                                       | `release` job yes; deploy no   | `onboard`, then you                                         |
-| `.github/workflows/deploy.yml`, `redeploy.yml`                    | the repo deploys                                             | no                             | you                                                         |
-| branches `main` and `dev`                                         | always                                                       | —                              | `onboard` creates `dev`                                     |
-| `.github/actions.env`                                             | it has its own variables (board, milestone, deploy settings) | no                             | `onboard` (empty starter), you                              |
-| repo secrets: `secrets.env`, `secrets.<env>.env`                  | it has its own secrets (deploy credentials, …)               | no                             | you — **never committed** ([§7](#7-where-you-run-commands)) |
-| `.gitignore`: `/.github/secrets*.env`                             | always                                                       | yes                            | `onboard`                                                   |
-| `.github/bootstrap.conf`                                          | some secrets only local scripts read                         | no                             | you                                                         |
-| `.github/repo-settings.json`                                      | it deviates from the shared settings                         | no                             | you                                                         |
-| `.github/rulesets/*.json`                                         | it deviates from / adds to the shared rulesets               | no                             | you                                                         |
-| `.husky/commit-msg`                                               | Node repo                                                    | yes                            | `onboard`                                                   |
-| `package.json` `"prettier": "@ebalzan/config/prettier"`           | Node repo                                                    | yes                            | `onboard`, unless the repo has its own Prettier config      |
-| `eslint.config.mjs` spreading `@ebalzan/config/eslint/node`       | Node repo                                                    | the base yes; repo blocks no   | `onboard`, unless the repo has its own ESLint config        |
-| `tsconfig.json` `"extends": "@ebalzan/config/tsconfig/node.json"` | TypeScript repo                                              | the base yes; paths no         | you (`onboard` only reports it)                             |
-| `renovate.json`                                                   | you use Renovate                                             | yes                            | `onboard`                                                   |
+| File                                                              | Needed when                                                  | Same in every repo?           | Written by                                                  |
+| ----------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------- |
+| `.github/workflows/auto-pr.yml`                                   | always                                                       | yes (`runs-on` aside)         | `onboard`                                                   |
+| `.github/workflows/pr-checks.yml`                                 | always                                                       | `pr-check` job yes; others no | `onboard`, then you                                         |
+| `.github/workflows/deploy.yml`, `redeploy.yml`                    | the repo deploys                                             | no                            | you                                                         |
+| branches `main` and `dev`                                         | always                                                       | —                             | `onboard` creates `dev`                                     |
+| `.github/actions.env`                                             | it has its own variables (board, milestone, deploy settings) | no                            | `onboard` (empty starter), you                              |
+| repo secrets: `secrets.env`, `secrets.<env>.env`                  | it has its own secrets (deploy credentials, …)               | no                            | you — **never committed** ([§7](#7-where-you-run-commands)) |
+| `.gitignore`: `/.github/secrets*.env`                             | always                                                       | yes                           | `onboard`                                                   |
+| `.github/bootstrap.conf`                                          | some secrets only local scripts read                         | no                            | you                                                         |
+| `.github/repo-settings.json`                                      | it deviates from the shared settings                         | no                            | you                                                         |
+| `.github/rulesets/*.json`                                         | it deviates from / adds to the shared rulesets               | no                            | you                                                         |
+| `.husky/commit-msg`                                               | Node repo                                                    | yes                           | `onboard`                                                   |
+| `package.json` `"prettier": "@ebalzan/config/prettier"`           | Node repo                                                    | yes                           | `onboard`, unless the repo has its own Prettier config      |
+| `eslint.config.mjs` spreading `@ebalzan/config/eslint/node`       | Node repo                                                    | the base yes; repo blocks no  | `onboard`, unless the repo has its own ESLint config        |
+| `tsconfig.json` `"extends": "@ebalzan/config/tsconfig/node.json"` | TypeScript repo                                              | the base yes; paths no        | you (`onboard` only reports it)                             |
+| `renovate.json`                                                   | you use Renovate                                             | yes                           | `onboard`                                                   |
 
-A brand-new Node repo that only needs the flow has the four workflow files,
+A brand-new Node repo that only needs the flow has the two workflow files,
 the hook, the Prettier/ESLint wiring, `renovate.json`, an empty `actions.env`
 and the `.gitignore` lines, and nothing else. A non-Node repo has the four
 workflow files, `renovate.json`, `actions.env` and `.gitignore`.
@@ -451,10 +426,10 @@ until you change its `uses:` lines. To freeze everything, fork ebalzan/ci
 
 ## 10. The two packages: @ebalzan/ci and @ebalzan/config
 
-| Package           | Owns                                                                                                                | Reaches a repo through                                          | An update arrives                          |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------ |
-| `@ebalzan/ci`     | **how code is shipped**: commit/PR-title rule, the four stages, releases, repo settings and rulesets, the admin CLI | `uses: ebalzan/ci/…@v2` at run time; devDependency for the hook | instantly, when `v2` moves                 |
-| `@ebalzan/config` | **how code is written**: Prettier options, ESLint presets, tsconfig bases                                           | devDependency, read by the editor, ESLint, Prettier and tsc     | as a Renovate PR, checked by the repo's CI |
+| Package           | Owns                                                                                                                     | Reaches a repo through                                          | An update arrives                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | ------------------------------------------ |
+| `@ebalzan/ci`     | **how code is shipped**: commit/PR-title rule, the two stages, the release PR, repo settings and rulesets, the admin CLI | `uses: ebalzan/ci/…@v2` at run time; devDependency for the hook | instantly, when `v2` moves                 |
+| `@ebalzan/config` | **how code is written**: Prettier options, ESLint presets, tsconfig bases                                                | devDependency, read by the editor, ESLint, Prettier and tsc     | as a Renovate PR, checked by the repo's CI |
 
 They stay separate because their updates must behave differently. A pipeline
 fix needs no change in any repo, so it ships instantly through the major tag.

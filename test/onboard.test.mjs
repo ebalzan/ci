@@ -6,7 +6,7 @@ import { test } from 'node:test'
 
 import { gitRepo, isolatedEnv, runCli } from './helpers.mjs'
 
-const WORKFLOWS = ['auto-pr.yml', 'pr-checks.yml', 'promote-dev-to-main.yml', 'release.yml']
+const WORKFLOWS = ['auto-pr.yml', 'pr-checks.yml']
 
 test('dry run changes nothing', t => {
   const env = isolatedEnv(t)
@@ -66,19 +66,32 @@ test('existing files are kept unless --force', t => {
   const env = isolatedEnv(t)
   const mine = 'name: mine\n'
   const { dir, git } = gitRepo(t, env, {
-    '.github/workflows/release.yml': mine,
+    '.github/workflows/pr-checks.yml': mine,
     'renovate.json5': '{}\n',
   })
   const result = runCli(['onboard', '-C', dir, '--no-push'], { env })
   assert.equal(result.status, 0, result.stderr + result.stdout)
-  assert.equal(readFileSync(join(dir, '.github', 'workflows', 'release.yml'), 'utf8'), mine)
+  assert.equal(readFileSync(join(dir, '.github', 'workflows', 'pr-checks.yml'), 'utf8'), mine)
   assert.ok(!existsSync(join(dir, 'renovate.json')), 'own Renovate config is respected')
 
   git('switch', '--quiet', 'main')
   git('branch', '-D', 'ci/onboard-ebalzan-ci')
   const forced = runCli(['onboard', '-C', dir, '--no-push', '--force'], { env })
   assert.equal(forced.status, 0, forced.stderr + forced.stdout)
-  assert.notEqual(readFileSync(join(dir, '.github', 'workflows', 'release.yml'), 'utf8'), mine)
+  assert.notEqual(readFileSync(join(dir, '.github', 'workflows', 'pr-checks.yml'), 'utf8'), mine)
+})
+
+test('a caller this version replaced is removed', t => {
+  const env = isolatedEnv(t)
+  const old = '.github/workflows/promote-dev-to-main.yml'
+  const { dir, git } = gitRepo(t, env, { [old]: 'name: Promote dev to main\n' })
+  const plan = runCli(['onboard', '-C', dir, '--dry-run', '--no-push'], { env })
+  assert.match(plan.stdout, /remove +\.github\/workflows\/promote-dev-to-main\.yml \(replaced/)
+
+  const result = runCli(['onboard', '-C', dir, '--no-push'], { env })
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+  assert.ok(!existsSync(join(dir, old)))
+  assert.match(git('show', '--stat', 'HEAD'), /promote-dev-to-main\.yml/)
 })
 
 test('refuses a dirty tree and an existing branch', t => {

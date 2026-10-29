@@ -1,12 +1,14 @@
-// The work-PR rules (actions/work-pr/rules.mjs) on plain objects: what Danger
-// fails or warns about for a feat/fix/… PR into dev.
+// The work-PR rules (actions/pr-check/work-pr/rules.mjs) on plain objects: what
+// Danger fails or warns about for a feat/fix/… PR into dev. What every PR needs
+// (assignee, milestone, board, description) is pr-check.test.mjs's.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { checkWorkPr, workPrConfig } from '../actions/work-pr/rules.mjs'
+import { prConfig } from '../actions/pr-check/rules.mjs'
+import { checkWorkPr } from '../actions/pr-check/work-pr/rules.mjs'
 
-const config = { ...workPrConfig({}), projectOwner: 'me' }
+const config = { ...prConfig({}), projectOwner: 'me' }
 
 // A PR that passes every rule; each test changes one thing.
 function check({ pr = {}, ...rest } = {}) {
@@ -39,28 +41,6 @@ test('a complete PR passes with no warnings', () => {
   assert.deepEqual(check(), { fails: [], warnings: [] })
 })
 
-test('workPrConfig reads the AUTO_* knobs, with defaults', () => {
-  assert.deepEqual(workPrConfig({}), {
-    baseBranch: 'dev',
-    milestoneTitle: '',
-    projectNumber: 0,
-    projectOwner: '',
-    maxChangedLines: 500,
-  })
-  const set = workPrConfig({
-    AUTO_BASE_BRANCH: 'develop',
-    AUTO_MILESTONE_TITLE: ' Q4 ',
-    AUTO_PROJECT_NUMBER: '15',
-    AUTO_PROJECT_OWNER: 'org',
-    AUTO_MAX_CHANGED_LINES: 'nope',
-  })
-  assert.equal(set.baseBranch, 'develop')
-  assert.equal(set.milestoneTitle, 'Q4')
-  assert.equal(set.projectNumber, 15)
-  assert.equal(set.projectOwner, 'org')
-  assert.equal(set.maxChangedLines, 500)
-})
-
 test('base must be dev', () => {
   failsWith(check({ pr: { base: 'main' } }), /merge into `dev`, not `main`/)
 })
@@ -85,10 +65,6 @@ test('exactly one type label: the branch type', () => {
   assert.deepEqual(check({ pr: { labels: ['Feat', 'needs-design'] } }).fails, [])
 })
 
-test('needs an assignee', () => {
-  failsWith(check({ pr: { assignees: [] } }), /Assign the PR/)
-})
-
 test('author must be the owner, a member or a collaborator', () => {
   for (const authorAssociation of ['MEMBER', 'COLLABORATOR']) {
     assert.deepEqual(check({ pr: { authorAssociation } }).fails, [])
@@ -98,24 +74,8 @@ test('author must be the owner, a member or a collaborator', () => {
   }
 })
 
-test('milestone is required only when AUTO_MILESTONE_TITLE is set', () => {
-  const run = milestone => check({ pr: { milestone }, config: { ...config, milestoneTitle: 'Q4' } })
-  failsWith(run(null), /Set the milestone to `Q4`/)
-  failsWith(run('Q3'), /Set the milestone to `Q4` \(AUTO_MILESTONE_TITLE\), not `Q3`/)
-  assert.deepEqual(run('q4').fails, [])
-})
-
-test('board is required only when AUTO_PROJECT_NUMBER is set', () => {
-  const run = extra => check({ config: { ...config, projectNumber: 15 }, ...extra })
-  failsWith(run({ projects: [] }), /Add the PR to project #15 of `me`/)
-  failsWith(run({ projects: [{ owner: 'other', number: 15 }] }), /Add the PR to project #15/)
-  failsWith(run({ projectsError: 'Resource not accessible' }), /Could not check .*not accessible/)
-  assert.deepEqual(run({ projects: [{ owner: 'Me', number: 15 }] }).fails, [])
-})
-
-test('needs a description; HTML comments alone do not count', () => {
-  failsWith(check({ pr: { body: '' } }), /Describe the change/)
-  failsWith(check({ pr: { body: '<!-- template -->\n  ' } }), /Describe the change/)
+test('what every PR needs applies too', () => {
+  failsWith(check({ pr: { assignees: [] } }), /Assign the PR/)
 })
 
 test('warnings: size, major release, behind base', () => {

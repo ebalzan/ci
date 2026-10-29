@@ -1,5 +1,6 @@
-# The work-PR check: what a feat/fix/… PR into dev must look like before it is
-# squash-merged. Three steps, each reported on its own in the job log; all three
+# The PR check: what a PR must look like before it is squash-merged, for both
+# kinds actions/auto-pr opens — a work PR (feat/fix/… → dev) and the release PR
+# (dev → main). Three steps, each reported on its own in the job log; all three
 # run even when one fails, so one push shows everything to fix:
 #
 #   Conventional title    commitlint on the PR title — it becomes the squash
@@ -7,21 +8,30 @@
 #   Conventional commits  commitlint on every commit of the PR — the squash
 #                         commit's body lists them (repo setting
 #                         squash_merge_commit_message = COMMIT_MESSAGES).
-#   PR metadata           Danger (dangerfile.mjs → rules.mjs): base branch, branch
-#                         name, title type = branch type, type label, assignee,
-#                         author, milestone, project board, description; plus
-#                         warnings (size, major release, behind base). Posts one
-#                         PR comment listing them, removed once all pass.
+#   PR metadata           Danger (dangerfile.mjs → work-pr/rules.mjs or
+#                         release-pr/rules.mjs, both on rules.mjs). Work PR: base
+#                         branch, branch name, title type = branch type, type
+#                         label, assignee, author, milestone, project board,
+#                         description; warnings for size, major release, behind
+#                         base. Release PR: base branch, the exact title
+#                         scripts/release-title.mjs computes (git-cliff), the
+#                         `release` label, assignee, milestone, board,
+#                         description, dev not behind main; a warning for a major
+#                         release. Posts one PR comment listing them, removed once
+#                         all pass.
 #
 # Renovate's PRs (chore/renovate-*) get the two commitlint steps only: Renovate
 # opens and rewrites them itself, with no board, milestone or AI description.
 #
 # Needs a full-history checkout of the PR head, Node, and the job env
-# REPO_VARS_JSON (the caller's `vars`) + AUTO_BASE_BRANCH. Called by
-# .github/workflows/work-pr.yml.
-name: Work PR
-description: Validate a feat/fix/… PR into dev — title, commits and PR metadata.
+# REPO_VARS_JSON (the caller's `vars`) + AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH.
+# Called by .github/workflows/pr-check.yml.
+name: PR Check
+description: Validate a work PR or the release PR — title, commits and PR metadata.
 inputs:
+  kind:
+    description: work (feat/fix/… → dev) or release (dev → main).
+    default: work
   github-token:
     description: Token for Danger's PR comment (pull-requests write).
     default: ${{ github.token }}
@@ -31,12 +41,11 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install commitlint and Danger
+    - name: Install commitlint, Danger and git-cliff
       id: install
       shell: bash
       run: |
-        npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
-        npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
+        npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
         node "$GITHUB_ACTION_PATH/../../scripts/shared-vars.mjs"
 
     - name: Conventional title
@@ -64,13 +73,19 @@ runs:
       if: ${{ !cancelled() && steps.install.outcome == 'success' && !startsWith(github.event.pull_request.head.ref, 'chore/renovate-') }}
       shell: bash
       env:
+        PR_KIND: ${{ inputs.kind }}
         DANGER_GITHUB_API_TOKEN: ${{ inputs.github-token }}
         PROJECT_TOKEN: ${{ inputs.project-token || inputs.github-token }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
+        ci_root="$GITHUB_ACTION_PATH/../.."
         BEHIND_BY="$(git rev-list --count "$HEAD_SHA..origin/$BASE_REF" 2>/dev/null || echo 0)"
         export BEHIND_BY
-        "$GITHUB_ACTION_PATH/node_modules/.bin/danger" ci \
+        if [ "$PR_KIND" = release ]; then
+          RELEASE_TITLE="$(node "$ci_root/scripts/release-title.mjs")"
+          export RELEASE_TITLE
+        fi
+        "$ci_root/node_modules/.bin/danger" ci \
           --dangerfile "$GITHUB_ACTION_PATH/dangerfile.mjs" \
-          --id work-pr --failOnErrors --no-publish-check
+          --id "$PR_KIND-pr" --failOnErrors --no-publish-check
