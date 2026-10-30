@@ -1,0 +1,85 @@
+# Cuts the release the merged dev → main release PR stands for. Runs on the
+# pull_request `closed` event of that PR (.github/workflows/release.yml checks it
+# was merged and its head is dev):
+#
+#   1. Install git-cliff  the root package.
+#   2. Verify merge       the PR was merged with a merge commit whose second
+#                         parent is the PR's head: dev's commits reached main
+#                         unchanged, so dev can catch up without a force-push.
+#                         Squash and rebase fail here, before anything is
+#                         tagged. verify-merge.sh.
+#   3. Version and tag    the title scripts/release-title.mjs computes on main
+#                         must equal the PR title; vX.Y.Z comes from it. With a
+#                         package.json, a `chore(release): X.Y.Z` commit bumps
+#                         it (and the lockfile); the tag goes on that commit,
+#                         else on the merge commit. Main and the tag are pushed
+#                         together. A re-run finds the tag and skips this.
+#                         release.sh.
+#   4. Publish            the GitHub Release vX.Y.Z, its notes the PR's
+#                         description (AI summary + changelog), else the
+#                         git-cliff changelog. publish.sh.
+#   5. Sync dev           dev fast-forwards to the release, or — when work
+#                         landed on it meanwhile — main is merged into it, so
+#                         the next release PR starts from the release.
+#                         sync-dev.sh.
+#
+# Needs a full-history checkout of the merge commit with push credentials, Node
+# >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH. Called by
+# .github/workflows/release.yml.
+name: Release
+description: Version, tag and publish the GitHub Release of a merged dev → main release PR, then bring dev up to main.
+inputs:
+  github-token:
+    description: Token for gh (contents write).
+    default: ${{ github.token }}
+  dev-token:
+    description: Token that pushes dev, so the push triggers Auto PR (a classic PAT with `repo`). Empty uses the checkout's credentials.
+    default: ''
+outputs:
+  tag:
+    description: The new vX.Y.Z tag.
+    value: ${{ steps.release.outputs.tag }}
+  version:
+    description: The new version, X.Y.Z.
+    value: ${{ steps.release.outputs.version }}
+  sha:
+    description: The commit the tag points at.
+    value: ${{ steps.release.outputs.sha }}
+runs:
+  using: composite
+  steps:
+    - name: Install git-cliff
+      shell: bash
+      run: npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+
+    - name: Verify merge
+      shell: bash
+      env:
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      run: bash "$GITHUB_ACTION_PATH/verify-merge.sh"
+
+    - name: Version and tag
+      id: release
+      shell: bash
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      run: bash "$GITHUB_ACTION_PATH/release.sh"
+
+    - name: Publish
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        PR_BODY: ${{ github.event.pull_request.body }}
+        TAG: ${{ steps.release.outputs.tag }}
+      run: bash "$GITHUB_ACTION_PATH/publish.sh"
+
+    - name: Sync dev
+      shell: bash
+      env:
+        DEV_TOKEN: ${{ inputs.dev-token }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        RELEASE_SHA: ${{ steps.release.outputs.sha }}
+      run: bash "$GITHUB_ACTION_PATH/sync-dev.sh"

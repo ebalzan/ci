@@ -1,12 +1,14 @@
 // The release PR's title: `<type>[!]: release vX.Y.Z`, from the commits on dev
-// that are not released yet. It becomes the squash commit on main, so its type
-// carries the bump: the first type present in config/types.json's order (the
-// minor types lead), `!` when a commit is breaking. The version is git-cliff's
-// (config/cliff.toml).
+// that are not released yet. It names the release: the first type present in
+// config/types.json's order (the minor types lead), `!` when a commit is
+// breaking. The version is git-cliff's (config/cliff.toml). Merged with a merge
+// commit, the release PR brings the same commits to main, where actions/release
+// recomputes the title and requires it to equal the PR's.
 //
 // Two ways in:
 //   import { releaseTitle } from './release-title.mjs'   (tests)
-//   node scripts/release-title.mjs                       (actions/auto-pr, actions/pr-check)
+//   node scripts/release-title.mjs                       (actions/auto-pr, actions/pr-check,
+//                                                         actions/release)
 // The second prints the title for the checkout in the current directory, or
 // nothing when there is no Conventional Commit to release.
 

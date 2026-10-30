@@ -6,7 +6,7 @@ import { test } from 'node:test'
 
 import { gitRepo, isolatedEnv, runCli } from './helpers.mjs'
 
-const WORKFLOWS = ['auto-pr.yml', 'pr-checks.yml']
+const WORKFLOWS = ['auto-pr.yml', 'pr-checks.yml', 'release.yml']
 
 test('dry run changes nothing', t => {
   const env = isolatedEnv(t)
@@ -40,6 +40,11 @@ test('--no-push renders every template and commits locally', t => {
     assert.match(text, /uses: ebalzan\/ci\/\.github\/workflows\/[a-z-]+\.yml@v9/, name)
     assert.match(text, /runs-on: self-hosted/, name)
   }
+  // deploy.yml is the repo's own: it calls nothing shared.
+  const deploy = readFileSync(join(dir, '.github', 'workflows', 'deploy.yml'), 'utf8')
+  assert.doesNotMatch(deploy, /__[A-Z_]+__/, 'deploy.yml has an unfilled placeholder')
+  assert.match(deploy, /workflow_call:/)
+  assert.match(deploy, /runs-on: self-hosted/)
   assert.match(
     readFileSync(join(dir, 'renovate.json'), 'utf8'),
     /github>ebalzan\/ci\/\/renovate\/tooling#v9/,

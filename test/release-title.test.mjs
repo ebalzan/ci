@@ -53,6 +53,35 @@ test('git-cliff: bumps from the last vX.Y.Z tag, ignoring the moving major tag',
   assert.equal(titleOf(history(t, ['tag v0.3.0', 'feat!: a'])), 'feat!: release v1.0.0')
 })
 
+test('git-cliff: the release PR merge commit and the release commit are not releases', t => {
+  const env = isolatedEnv(t)
+  const { dir, git } = gitRepo(t, env)
+  git('tag', 'v1.3.0')
+  git('switch', '--quiet', '-c', 'dev')
+  git('commit', '--quiet', '--allow-empty', '-m', 'fix: a')
+  git('switch', '--quiet', 'main')
+  git(
+    'merge',
+    '--quiet',
+    '--no-ff',
+    'dev',
+    '-m',
+    'Merge pull request #1 from o/dev',
+    '-m',
+    'fix: release v1.3.1',
+  )
+  // On main at the merge: the same title the release PR had on dev.
+  assert.equal(titleOf(dir), 'fix: release v1.3.1')
+  git('commit', '--quiet', '--allow-empty', '-m', 'chore(release): 1.3.1')
+  git('tag', 'v1.3.1')
+  assert.equal(titleOf(dir), '')
+  // dev fast-forwarded to the release, then new work: counted from v1.3.1.
+  git('switch', '--quiet', 'dev')
+  git('merge', '--quiet', '--ff-only', 'main')
+  git('commit', '--quiet', '--allow-empty', '-m', 'feat: b')
+  assert.equal(titleOf(dir), 'feat: release v1.4.0')
+})
+
 test('git-cliff: no tag yet starts at v0.1.0; a released HEAD has no title', t => {
   assert.equal(titleOf(history(t, ['fix: a'])), 'fix: release v0.1.0')
   assert.equal(titleOf(history(t, ['fix: a', 'tag v0.1.0'])), '')

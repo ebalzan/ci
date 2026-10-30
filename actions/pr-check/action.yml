@@ -1,13 +1,16 @@
-# The PR check: what a PR must look like before it is squash-merged, for both
-# kinds actions/auto-pr opens — a work PR (feat/fix/… → dev) and the release PR
-# (dev → main). Three steps, each reported on its own in the job log; all three
-# run even when one fails, so one push shows everything to fix:
+# The PR check: what a PR must look like before it is merged, for both kinds
+# actions/auto-pr opens — a work PR (feat/fix/… → dev, squash-merged) and the
+# release PR (dev → main, merged with a merge commit). Three steps, each
+# reported on its own in the job log; all three run even when one fails, so one
+# push shows everything to fix:
 #
-#   Conventional title    commitlint on the PR title — it becomes the squash
-#                         commit that drives the release.
-#   Conventional commits  commitlint on every commit of the PR — the squash
-#                         commit's body lists them (repo setting
-#                         squash_merge_commit_message = COMMIT_MESSAGES).
+#   Conventional title    commitlint on the PR title — a work PR's becomes its
+#                         squash commit on dev, which drives the release.
+#   Conventional commits  commitlint on every commit of the PR — a work PR's
+#                         squash commit lists them in its body (repo setting
+#                         squash_merge_commit_message = COMMIT_MESSAGES); the
+#                         release PR's are dev's commits, which reach main as
+#                         they are.
 #   PR metadata           Danger (dangerfile.mjs → work-pr/rules.mjs or
 #                         release-pr/rules.mjs, both on rules.mjs). Work PR: base
 #                         branch, branch name, title type = branch type, type

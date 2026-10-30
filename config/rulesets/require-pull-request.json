@@ -1,10 +1,10 @@
 {
-  "$comment": "Changes reach main and dev only through a squash-merged PR whose 'pr-check / Work PR' and 'pr-check / Release PR' checks passed (each is skipped, so passed, for the other kind of PR). DISABLED by default: release.yml pushes the release commit to main and force-points dev with GITHUB_TOKEN, so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-pull-request.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through. Reference: docs/REPO_RULES.md.",
+  "$comment": "Changes reach dev only through a squash-merged work PR whose 'pr-check / Work PR' check passed — its title becomes the one commit on dev. main is require-release-pr.json's. DISABLED by default: the Release workflow brings dev up to main with GITHUB_TOKEN (a fast-forward, or a merge of main when work landed meanwhile), so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-pull-request.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through. Reference: docs/REPO_RULES.md.",
   "name": "ci: require pull request",
   "target": "branch",
   "enforcement": "disabled",
   "conditions": {
-    "ref_name": { "include": ["refs/heads/main", "refs/heads/dev"], "exclude": [] }
+    "ref_name": { "include": ["refs/heads/dev"], "exclude": [] }
   },
   "bypass_actors": [
     { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" },
@@ -26,10 +26,7 @@
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": false,
-        "required_status_checks": [
-          { "context": "pr-check / Work PR" },
-          { "context": "pr-check / Release PR" }
-        ]
+        "required_status_checks": [{ "context": "pr-check / Work PR" }]
       }
     }
   ]

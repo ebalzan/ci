@@ -1,10 +1,10 @@
 {
-  "$comment": "dev is the integration branch: it cannot be deleted. Force-pushes stay allowed because release.yml's sync-dev job force-points dev at each release commit. Reference: docs/REPO_RULES.md.",
+  "$comment": "dev is the integration branch: it cannot be deleted or force-pushed. The Release workflow only fast-forwards it (or merges main into it), so nothing in the pipeline needs a bypass. Reference: docs/REPO_RULES.md.",
   "name": "ci: protect dev",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
     "ref_name": { "include": ["refs/heads/dev"], "exclude": [] }
   },
-  "rules": [{ "type": "deletion" }]
+  "rules": [{ "type": "deletion" }, { "type": "non_fast_forward" }]
 }

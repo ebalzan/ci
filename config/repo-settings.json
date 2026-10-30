@@ -1,10 +1,12 @@
 {
-  "$comment": "Repository settings every managed repo gets (PATCH /repos/{owner}/{repo}). A repo overrides any key in its own .github/repo-settings.json. Keys starting with $ are documentation and are never sent. Reference: docs/REPO_RULES.md.",
+  "$comment": "Repository settings every managed repo gets (PATCH /repos/{owner}/{repo}). A repo overrides any key in its own .github/repo-settings.json. Keys starting with $ are documentation and are never sent. Work PRs are squash-merged into dev (the PR title becomes the commit); the dev → main release PR is merged with a merge commit (GitHub's default title, which commitlint and git-cliff skip). Rebase merges are off: they rewrite commits. Reference: docs/REPO_RULES.md.",
   "allow_squash_merge": true,
-  "allow_merge_commit": false,
-  "allow_rebase_merge": true,
+  "allow_merge_commit": true,
+  "allow_rebase_merge": false,
   "squash_merge_commit_title": "PR_TITLE",
   "squash_merge_commit_message": "COMMIT_MESSAGES",
+  "merge_commit_title": "MERGE_MESSAGE",
+  "merge_commit_message": "PR_TITLE",
   "delete_branch_on_merge": true,
   "allow_update_branch": true
 }
