@@ -33,6 +33,7 @@ test(
     assert.match(out, /repository settings\n.*squash_merge_commit_title=PR_TITLE/)
     assert.match(out, /ci: protect main +active · protect-main\.json/)
     assert.match(out, /ci: require pull request +disabled · require-pull-request\.json/)
+    assert.match(out, /ci: require release pull request +disabled · require-release-pr\.json/)
     assert.match(out, /Dry run complete/)
   },
 )

@@ -1,6 +1,7 @@
 # =============================================================================
-# PR Check (reusable) — the check every PR must pass before it is squash-merged
-# (actions/pr-check). One job per PR kind; the other one is skipped:
+# PR Check (reusable) — the check every PR must pass before it is merged
+# (actions/pr-check): a work PR squash-merged into dev, the release PR merged
+# into main with a merge commit. One job per PR kind; the other one is skipped:
 #
 #   Work PR     feat/fix/… → dev. The title and every commit are Conventional
 #               Commits (commitlint); the PR's data (Danger): base is dev,

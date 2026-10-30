@@ -66,19 +66,46 @@ test('shipped rulesets are well-formed and managed', () => {
   }
 })
 
-test('dev stays force-pushable: sync-dev depends on it', () => {
-  const dir = join(ROOT, 'config', 'rulesets')
-  for (const file of readdirSync(dir).filter(name => name.endsWith('.json'))) {
-    const ruleset = JSON.parse(readFileSync(join(dir, file), 'utf8'))
-    if (ruleset.enforcement !== 'active') continue
-    const coversDev = ruleset.conditions.ref_name.include.includes('refs/heads/dev')
-    const blocksForcePush = ruleset.rules.some(rule => rule.type === 'non_fast_forward')
-    assert.ok(!(coversDev && blocksForcePush), `${file} would break release.yml's sync-dev`)
+const ruleset = file => JSON.parse(readFileSync(join(ROOT, 'config', 'rulesets', file), 'utf8'))
+const mergeMethods = ({ rules }) =>
+  rules.find(rule => rule.type === 'pull_request').parameters.allowed_merge_methods
+
+test('main and dev are never force-pushed: the release only moves them forward', () => {
+  for (const [file, ref] of [
+    ['protect-main.json', 'refs/heads/main'],
+    ['protect-dev.json', 'refs/heads/dev'],
+  ]) {
+    const { enforcement, conditions, rules } = ruleset(file)
+    assert.equal(enforcement, 'active', file)
+    assert.deepEqual(conditions.ref_name.include, [ref], file)
+    assert.ok(
+      rules.some(rule => rule.type === 'non_fast_forward'),
+      file,
+    )
   }
 })
 
-test('repo settings force PR-title squash commits', () => {
+test('work PRs squash into dev; the release PR merge-commits into main', () => {
+  const dev = ruleset('require-pull-request.json')
+  assert.deepEqual(dev.conditions.ref_name.include, ['refs/heads/dev'])
+  assert.deepEqual(mergeMethods(dev), ['squash'])
+  const main = ruleset('require-release-pr.json')
+  assert.deepEqual(main.conditions.ref_name.include, ['refs/heads/main'])
+  assert.deepEqual(mergeMethods(main), ['merge'])
+  // The release commit and the dev sync are pushed with GITHUB_TOKEN.
+  for (const { bypass_actors } of [dev, main]) {
+    assert.ok(
+      bypass_actors.some(actor => actor.actor_type === 'Integration' && actor.actor_id === 15368),
+    )
+  }
+})
+
+test('repo settings: PR-title squash commits, default merge commits, no rebase', () => {
   const settings = JSON.parse(readFileSync(join(ROOT, 'config', 'repo-settings.json'), 'utf8'))
   assert.equal(settings.allow_squash_merge, true)
   assert.equal(settings.squash_merge_commit_title, 'PR_TITLE')
+  assert.equal(settings.allow_merge_commit, true)
+  // `Merge pull request #N from …`: commitlint and git-cliff skip it.
+  assert.equal(settings.merge_commit_title, 'MERGE_MESSAGE')
+  assert.equal(settings.allow_rebase_merge, false)
 })

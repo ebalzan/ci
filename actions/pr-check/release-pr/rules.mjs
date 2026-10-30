@@ -1,5 +1,6 @@
 // The release-PR rules: what the dev → main PR actions/auto-pr opens must look
-// like before it is squash-merged — on top of what every PR needs (../rules.mjs).
+// like before it is merged with a merge commit — on top of what every PR needs
+// (../rules.mjs).
 
 import { TITLE_PATTERN, checkTracking, code } from '../rules.mjs'
 
@@ -42,8 +43,9 @@ export function checkReleasePr({
     )
   } else if (pr.title !== releaseTitle) {
     fails.push(
-      `The title must be ${code(releaseTitle)}: it becomes the squash commit that drives ` +
-        'the release. Push to dev (or re-run Auto PR) to restore it.',
+      `The title must be ${code(releaseTitle)}: it names the release merging cuts, and ` +
+        'the Release workflow checks it against main. Push to dev (or re-run Auto PR) to ' +
+        'restore it.',
     )
   }
 
@@ -56,8 +58,9 @@ export function checkReleasePr({
   if (behindBy > 0) {
     fails.push(
       `${code(config.releaseBranch)} has ${behindBy} commit${behindBy > 1 ? 's' : ''} that ` +
-        `${code(pr.head)} does not: point ${code(pr.head)} at ${code(config.releaseBranch)} ` +
-        'before releasing again (squash merges leave them with unrelated histories).',
+        `${code(pr.head)} does not (the last release commit, with its package.json version): ` +
+        `merge ${code(config.releaseBranch)} into ${code(pr.head)}. The Release workflow does ` +
+        'it after every release — re-run its failed job.',
     )
   }
 

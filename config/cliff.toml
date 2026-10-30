@@ -1,7 +1,8 @@
 # git-cliff (https://git-cliff.org): the next version and the changelog of the
 # release PR, from the Conventional Commits on dev since the last vX.Y.Z tag.
 # Read by scripts/release-title.mjs (the title) and actions/auto-pr (the body);
-# actions/pr-check recomputes the title with it.
+# actions/pr-check recomputes the title with it, actions/release recomputes it
+# on main and falls back to it for the GitHub Release notes.
 #
 # The bump matches config/types.json: feat → minor, `!` or a BREAKING CHANGE
 # footer → major (from 0.x too), every other type → patch. A repo with no tag
@@ -21,7 +22,8 @@ trim = true
 
 [git]
 conventional_commits = true
-# Merge commits and git's own subjects (Revert "…") are not releases.
+# Merge commits and git's own subjects (Revert "…") are not releases — among
+# them the release PR's merge commit (`Merge pull request #N from …`).
 filter_unconventional = true
 protect_breaking_commits = true
 # Only vX.Y.Z: the moving major tags (v4) would otherwise end the range.

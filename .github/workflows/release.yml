@@ -1,0 +1,108 @@
+# =============================================================================
+# Release (reusable) — the release the merged dev → main release PR cuts.
+#
+# The caller triggers this when a PR into main is closed (pull_request: closed).
+# The job runs only when that PR was MERGED and its head is dev in this repo —
+# the release PR actions/auto-pr opens. A work PR merged into dev, a PR closed
+# without merging, or any other PR into main never releases. Then
+# (actions/release):
+#   - the release PR must have been merged with a merge commit (squash or
+#     rebase fail: they rewrite dev's commits);
+#   - the release title git-cliff computes on main must equal the PR title;
+#   - package.json (when there is one) gets the version in a
+#     `chore(release): X.Y.Z` commit, tagged vX.Y.Z and pushed to main;
+#   - the GitHub Release vX.Y.Z is published with the PR's description;
+#   - dev is brought up to main, so the next release PR starts from the tag.
+#
+# Deploying is the caller's business: it chains a job on the outputs. `tag` is
+# empty when nothing was released (the job was skipped).
+#
+#   jobs:
+#     release:
+#       uses: ebalzan/ci/.github/workflows/release.yml@v4
+#     deploy:
+#       needs: release
+#       if: ${{ needs.release.outputs.tag != '' }}
+#       uses: ./.github/workflows/deploy.yml
+#       with:
+#         tag: ${{ needs.release.outputs.tag }}
+#
+# GH_PROJECT_TOKEN (optional, classic PAT with `repo`) pushes dev when work
+# landed on it during the release, so Auto PR reopens the release PR at once;
+# with GITHUB_TOKEN it reopens on the next push to dev.
+#
+# Caller must grant: contents: write, pull-requests: read.
+# =============================================================================
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Runner label for the job.
+        type: string
+        default: ubuntu-latest
+      base-branch:
+        description: Branch work PRs target; the release PR's head.
+        type: string
+        default: dev
+      release-branch:
+        description: Branch the release PR targets.
+        type: string
+        default: main
+    secrets:
+      GH_PROJECT_TOKEN:
+        required: false
+    outputs:
+      tag:
+        description: The new vX.Y.Z tag, or empty when nothing was released.
+        value: ${{ jobs.release.outputs.tag }}
+      version:
+        description: The new version, X.Y.Z.
+        value: ${{ jobs.release.outputs.version }}
+      sha:
+        description: The commit the tag points at.
+        value: ${{ jobs.release.outputs.sha }}
+
+jobs:
+  release:
+    name: Version, tag and publish
+    if: >-
+      ${{ github.event_name == 'pull_request'
+      && github.event.pull_request.merged
+      && github.event.pull_request.base.ref == inputs.release-branch
+      && github.event.pull_request.head.ref == inputs.base-branch
+      && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: write
+      pull-requests: read
+    # Queued, never cancelled: a run cut short could tag without a Release.
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      AUTO_BASE_BRANCH: ${{ inputs.base-branch }}
+      AUTO_RELEASE_BRANCH: ${{ inputs.release-branch }}
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      # The merge commit, with full history and the tags: git-cliff computes the
+      # version from them. Credentials stay: the job pushes main and dev.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Same major as this workflow's: bump both together.
+      - id: release
+        uses: ebalzan/ci/actions/release@v4
+        with:
+          dev-token: ${{ secrets.GH_PROJECT_TOKEN }}

@@ -1,5 +1,5 @@
 {
-  "$comment": "main is the release branch: it cannot be deleted or force-pushed. The release job only fast-forwards it, so nothing in the pipeline needs a bypass. Reference: docs/REPO_RULES.md.",
+  "$comment": "main is the release branch: it cannot be deleted or force-pushed. The Release workflow only fast-forwards it with the `chore(release): X.Y.Z` commit, so nothing in the pipeline needs a bypass. Reference: docs/REPO_RULES.md.",
   "name": "ci: protect main",
   "target": "branch",
   "enforcement": "active",
