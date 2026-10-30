@@ -5,10 +5,9 @@
 # (Actions → Deploy → Run workflow) to redeploy any tag, or to roll back to an
 # older one.
 #
-# Permissions: on a release, the `deploy` job of release.yml grants them
-# (contents: read, id-token: write, packages: write, deployments: write); add
-# there what this file needs beyond that. Secrets: all of the repo's, and the
-# `production` environment's.
+# Permissions: the block below, for a run by hand. On a release, the `deploy`
+# job of release.yml grants them and this file may not ask for more — change
+# both together. Secrets: all of the repo's, and the `production` environment's.
 #
 # The `production` environment: required reviewers and environment secrets
 # work. Do not limit it to the main branch: a release's run has the ref
@@ -30,6 +29,13 @@ on:
         description: The release to deploy (vX.Y.Z).
         type: string
         required: true
+
+# Same as the `deploy` job of release.yml.
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  deployments: write
 
 jobs:
   deploy:
