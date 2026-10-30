@@ -35,7 +35,8 @@ jobs:
     needs: release
     if: ${{ needs.release.outputs.tag != '' }}
     # What deploy.yml may use: a called workflow gets at most what this job
-    # grants. Add to it if a deploy needs more (e.g. attestations: write).
+    # grants. Keep it equal to deploy.yml's own `permissions` (e.g. add
+    # attestations: write to both).
     permissions:
       contents: read
       id-token: write
