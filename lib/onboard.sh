@@ -19,8 +19,8 @@
 #   5. commits it all as `ci: onboard <ci repo>`.
 # Then, unless --no-push:
 #   6. creates the dev branch on GitHub if it is missing;
-#   7. tags the repo with REPOS_TOPIC (config/repos.env), so `--all` finds it;
-#   8. runs the bootstrap (variables, secrets, settings, rulesets);
+#   7. tags the repo with the topic ebalzan-ci, so `sync --all` finds it;
+#   8. runs `ebalzan-ci sync` (variables, secrets, settings, rulesets);
 #   9. pushes the branch. The auto-pr.yml it adds runs on that very push and
 #      opens the PR into dev. Review and squash-merge it.
 #
@@ -39,7 +39,7 @@
 #       --no-config        Do not wire @ebalzan/config (Prettier, ESLint)
 #       --no-push          Stop after the local commit (no GitHub changes at all)
 #   -n, --dry-run          Show what would happen; change nothing
-#   -y, --yes              Skip the confirmations (also for the bootstrap)
+#   -y, --yes              Skip the confirmations (also for the sync)
 #   -h, --help             Show this help
 #
 # Requirements: git; gh authenticated with admin on the repo (not needed with
@@ -48,15 +48,56 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CI_ROOT="$(dirname "$SCRIPT_DIR")"
-# shellcheck source=_lib.sh
-source "$SCRIPT_DIR/_lib.sh"
+
+# ---- helpers (bash 3.2 compatible: macOS /bin/bash) --------------------------
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'
+  YELLOW=$'\033[33m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
+else
+  BOLD=''; DIM=''; RED=''; GREEN=''; YELLOW=''; CYAN=''; RESET=''
+fi
+info() { printf '%s\n' "$*"; }
+step() { printf '%s==>%s %s\n' "$CYAN$BOLD" "$RESET" "$*"; }
+ok()   { printf '%s ✓%s %s\n' "$GREEN" "$RESET" "$*"; }
+warn() { printf '%s ! %s%s\n' "$YELLOW" "$*" "$RESET"; }
+die()  { printf '%s ✗ %s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
+
+require_gh() {
+  command -v gh >/dev/null 2>&1 || die "GitHub CLI (gh) is not installed: https://cli.github.com"
+}
+require_auth() {
+  gh auth status >/dev/null 2>&1 || die "gh is not authenticated. Run: gh auth login"
+}
+# detect_repo DIR — OWNER/REPO of the checkout at DIR: its git remote, then the
+# canonical name GitHub gives it (a transferred repo resolves to where it is now).
+detect_repo() {
+  local repo canonical
+  repo="$(git -C "$1" remote get-url origin 2>/dev/null \
+    | sed -E 's#(git@|ssh://git@|https://)([^/:]+)[:/]##; s#\.git$##' || true)"
+  if [[ -n "$repo" ]]; then
+    canonical="$(gh repo view "$repo" --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+    [[ -n "$canonical" ]] && repo="$canonical"
+  fi
+  printf '%s' "$repo"
+}
+confirm() {
+  local reply
+  printf '%s%s [y/N] %s' "$YELLOW" "$1" "$RESET"
+  read -r reply
+  [[ "$reply" =~ ^[Yy]$ ]]
+}
+# print_help — this script's leading comment block, minus the shebang.
+print_help() {
+  awk 'NR>1 && /^#/{ sub(/^# ?/, ""); print; next } NR>1{ exit }' "${BASH_SOURCE[0]}"
+}
 
 TEMPLATES_DIR="$CI_ROOT/templates"
-REPOS_FILE="$CI_ROOT/config/repos.env"
-CI_REPO="$(unquote "$(env_get "$REPOS_FILE" CI_REPO)")"
-CI_PACKAGE="$(node "$SCRIPT_DIR/_json.mjs" get "$CI_ROOT/package.json" name)"
-CI_VERSION="$(node "$SCRIPT_DIR/_json.mjs" get "$CI_ROOT/package.json" version)"
-TOPIC="$(unquote "$(env_get "$REPOS_FILE" REPOS_TOPIC)")"
+# The slug every caller's `uses:` names: package.json "repository" (change it there if you fork).
+CI_REPO="$(node -p 'require(process.argv[1]).repository.url.replace(/^.*github\.com[/:]|\.git$/g, "")' "$CI_ROOT/package.json")"
+CI_PACKAGE="$(node -p 'require(process.argv[1]).name' "$CI_ROOT/package.json")"
+CI_VERSION="$(node -p 'require(process.argv[1]).version' "$CI_ROOT/package.json")"
+# The GitHub topic `ebalzan-ci sync --all` selects repos by (lib/sync.mjs).
+TOPIC="ebalzan-ci"
 
 # ---- args --------------------------------------------------------------------
 REPO_DIR="."
@@ -84,12 +125,12 @@ while [[ $# -gt 0 ]]; do
     --no-push)     PUSH=false; shift ;;
     -n|--dry-run)  DRY_RUN=true; shift ;;
     -y|--yes)      ASSUME_YES=true; shift ;;
-    -h|--help)     print_help "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)     print_help; exit 0 ;;
     *)             die "Unknown option: $1 (try --help)" ;;
   esac
 done
 
-[[ -n "$CI_REPO" ]] || die "CI_REPO is not set in $REPOS_FILE."
+[[ "$CI_REPO" == */* ]] || die "Could not read the CI repo from package.json \"repository\" (got '$CI_REPO')."
 [[ -n "$RUNS_ON" && -n "$REF" && -n "$BRANCH" ]] || die "--runs-on, --ref and --branch need a value."
 
 # ---- preconditions -----------------------------------------------------------
@@ -229,7 +270,7 @@ if $PUSH; then
   info "  ${BOLD}GitHub${RESET} ${DIM}($REPO)${RESET}"
   $DEV_EXISTS || info "    create branch dev from $BASE_REF"
   [[ -z "$TOPIC" ]] || info "    add topic '$TOPIC'"
-  info "    bootstrap: variables, secrets, settings, rulesets"
+  info "    sync: variables, secrets, settings, rulesets"
   info "    push $BRANCH → auto-pr.yml opens the PR into dev"
 else
   info "  ${DIM}--no-push: GitHub is left untouched${RESET}"
@@ -267,7 +308,7 @@ if $GITIGNORE; then
   [[ ! -s "$REPO_DIR/.gitignore" ]] || [[ -z "$(tail -c1 "$REPO_DIR/.gitignore")" ]] || printf '\n' >> "$REPO_DIR/.gitignore"
   cat >> "$REPO_DIR/.gitignore" <<'GITIGNORE'
 
-# Actions secrets, synced by `ebalzan-ci bootstrap`. Never commit them.
+# Actions secrets, pushed by `ebalzan-ci sync`. Never commit them.
 /.github/secrets.env
 /.github/secrets.*.env
 !/.github/secrets*.env.example
@@ -334,10 +375,10 @@ if [[ -n "$TOPIC" ]]; then
   gh repo edit "$REPO" --add-topic "$TOPIC" >/dev/null && ok "added topic '$TOPIC'"
 fi
 
-BOOTSTRAP_ARGS=(--repo-dir "$REPO_DIR" --repo "$REPO")
-$ASSUME_YES && BOOTSTRAP_ARGS+=(--yes)
-"$SCRIPT_DIR/gh-bootstrap.sh" "${BOOTSTRAP_ARGS[@]}" \
-  || warn "Bootstrap did not finish; fix the cause and re-run: ebalzan-ci bootstrap -C $REPO_DIR"
+SYNC_ARGS=(--repo-dir "$REPO_DIR" --repo "$REPO")
+$ASSUME_YES && SYNC_ARGS+=(--yes)
+node "$CI_ROOT/bin/cli.mjs" sync "${SYNC_ARGS[@]}" \
+  || warn "Sync did not finish; fix the cause and re-run: ebalzan-ci sync -C $REPO_DIR"
 
 git_ push --quiet -u origin "$BRANCH"
 ok "pushed $BRANCH"

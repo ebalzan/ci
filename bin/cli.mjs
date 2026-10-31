@@ -2,9 +2,8 @@
 //
 // ebalzan-ci — the command-line entry point of @ebalzan/ci.
 //
-// Every command except commit-msg, path and version runs one of the bash tools
-// next to this file with the arguments unchanged, so `ebalzan-ci <cmd> --help`
-// prints that tool's own help. Reference: docs/CLI.md.
+// sync is lib/sync.mjs; onboard is the bash tool lib/onboard.sh, run with the
+// arguments unchanged. `ebalzan-ci <cmd> --help` prints the command's own help.
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -13,24 +12,19 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+import { sync } from '../lib/sync.mjs'
+
 const BIN_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(BIN_DIR)
 const COMMITLINT_CONFIG = join(ROOT, 'commitlint.config.mjs')
 
-const SCRIPTS = {
-  bootstrap: 'gh-bootstrap.sh',
-  reset: 'gh-reset.sh',
-  onboard: 'onboard.sh',
-}
-
 const HELP = `Usage: ebalzan-ci <command> [options]
 
 Commands:
-  onboard        Add the shared workflows, hook and rules to a repo, then bootstrap it
-  bootstrap      Sync variables, secrets, settings and rulesets onto a repo (or --all)
-  reset          Delete Actions variables/secrets on a repo (typed confirmation)
+  sync           Push variables, secrets, settings and rulesets to a repo (or --all)
+  onboard        Add the shared workflows, hook and rules to a repo, then sync it
   commit-msg     Validate a commit message (the husky commit-msg hook calls this)
-  path           Print the package directory (to source bin/_lib.sh, read config/)
+  path           Print the package directory (to read config/)
   version        Print the package version
   help           Show this help
 
@@ -91,11 +85,14 @@ function run(command, args) {
   return result.status ?? 1
 }
 
-function main(argv) {
+async function main(argv) {
   const [command, ...args] = argv
-  if (Object.hasOwn(SCRIPTS, command ?? ''))
-    return run('bash', [join(BIN_DIR, SCRIPTS[command]), ...args])
   switch (command) {
+    case 'sync':
+    case 'bootstrap': // the 3.x name, still written in onboarded repos
+      return sync(args)
+    case 'onboard':
+      return run('bash', [join(ROOT, 'lib', 'onboard.sh'), ...args])
     case 'commit-msg':
       return commitMsg(args)
     case 'path':
@@ -118,4 +115,4 @@ function main(argv) {
   }
 }
 
-process.exit(main(process.argv.slice(2)))
+process.exit(await main(process.argv.slice(2)))

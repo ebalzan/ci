@@ -16,22 +16,11 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-const SHARED_VARS_FILE = fileURLToPath(new URL('../config/actions.env', import.meta.url))
+import { parseEnvFile } from '../lib/config.mjs'
 
-// KEY=VALUE lines; blank lines and `#` comments skipped, one pair of
-// surrounding quotes stripped — the dotenv subset bin/_lib.sh reads.
-export function parseEnvFile(text) {
-  const vars = {}
-  for (const line of text.split(/\r?\n/)) {
-    if (/^\s*(#|$)/.test(line)) continue
-    const i = line.indexOf('=')
-    if (i < 1) continue
-    let value = line.slice(i + 1)
-    if (value.length >= 2 && /^(["']).*\1$/.test(value)) value = value.slice(1, -1)
-    vars[line.slice(0, i).trim()] = value
-  }
-  return vars
-}
+export { parseEnvFile }
+
+const SHARED_VARS_FILE = fileURLToPath(new URL('../config/actions.env', import.meta.url))
 
 // The caller repo's variables, passed whole by the workflows as
 // `REPO_VARS_JSON: ${{ toJSON(vars) }}` — so a repo can set any AUTO_* knob,
