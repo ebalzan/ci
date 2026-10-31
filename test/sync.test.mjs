@@ -86,20 +86,20 @@ test('--skip leaves sections out of the plan, and rejects unknown ones', t => {
   assert.match(bad.stderr, /unknown section 'everything'/)
 })
 
-test('not a checkout is an error; so is a --repo with no checkout', t => {
+test('not a checkout is an error, with -C or in the current directory', t => {
   const env = isolatedEnv(t)
   const dir = tempDir(t)
   assert.equal(runCli(['sync', '-C', join(dir), '--dry-run'], { env }).status, 1)
 
-  const result = runCli(['sync', '-R', 'someone/nowhere', '--dry-run'], { env, cwd: dir })
+  const result = runCli(['sync', '-R', 'someone/example', '--dry-run'], { env, cwd: dir })
   assert.equal(result.status, 1)
-  assert.match(result.stderr, /No checkout of someone\/nowhere/)
+  assert.match(result.stderr, /is not a git checkout\. Run sync in the repo/)
 })
 
-test('unknown options and --all with a target are errors', t => {
+test('unknown options, --all among them, are errors', t => {
   const env = isolatedEnv(t)
   assert.match(runCli(['sync', '--nope'], { env }).stderr, /try --help/)
-  assert.match(runCli(['sync', '--all', '-R', 'a/b'], { env }).stderr, /--all cannot be combined/)
+  assert.match(runCli(['sync', '--all'], { env }).stderr, /try --help/)
 })
 
 test('mergeEnv: FOO_FILE in the repo overrides a shared FOO (secrets)', t => {

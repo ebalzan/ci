@@ -19,9 +19,8 @@
 #   5. commits it all as `ci: onboard <ci repo>`.
 # Then, unless --no-push:
 #   6. creates the dev branch on GitHub if it is missing;
-#   7. tags the repo with the topic ebalzan-ci, so `sync --all` finds it;
-#   8. runs `ebalzan-ci sync` (variables, secrets, settings, rulesets);
-#   9. pushes the branch. The auto-pr.yml it adds runs on that very push and
+#   7. runs `ebalzan-ci sync` (variables, secrets, settings, rulesets);
+#   8. pushes the branch. The auto-pr.yml it adds runs on that very push and
 #      opens the PR into dev. Review and squash-merge it.
 #
 # Usage:
@@ -96,8 +95,6 @@ TEMPLATES_DIR="$CI_ROOT/templates"
 CI_REPO="$(node -p 'require(process.argv[1]).repository.url.replace(/^.*github\.com[/:]|\.git$/g, "")' "$CI_ROOT/package.json")"
 CI_PACKAGE="$(node -p 'require(process.argv[1]).name' "$CI_ROOT/package.json")"
 CI_VERSION="$(node -p 'require(process.argv[1]).version' "$CI_ROOT/package.json")"
-# The GitHub topic `ebalzan-ci sync --all` selects repos by (lib/sync.mjs).
-TOPIC="ebalzan-ci"
 
 # ---- args --------------------------------------------------------------------
 REPO_DIR="."
@@ -269,7 +266,6 @@ fi
 if $PUSH; then
   info "  ${BOLD}GitHub${RESET} ${DIM}($REPO)${RESET}"
   $DEV_EXISTS || info "    create branch dev from $BASE_REF"
-  [[ -z "$TOPIC" ]] || info "    add topic '$TOPIC'"
   info "    sync: variables, secrets, settings, rulesets"
   info "    push $BRANCH → auto-pr.yml opens the PR into dev"
 else
@@ -369,10 +365,6 @@ if ! $DEV_EXISTS; then
   sha="$(gh api "repos/$REPO/commits/$default_branch" -q .sha)"
   gh api -X POST "repos/$REPO/git/refs" -f ref=refs/heads/dev -f sha="$sha" >/dev/null
   ok "created branch dev from $default_branch (${sha:0:7})"
-fi
-
-if [[ -n "$TOPIC" ]]; then
-  gh repo edit "$REPO" --add-topic "$TOPIC" >/dev/null && ok "added topic '$TOPIC'"
 fi
 
 SYNC_ARGS=(--repo-dir "$REPO_DIR" --repo "$REPO")

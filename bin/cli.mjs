@@ -21,7 +21,7 @@ const COMMITLINT_CONFIG = join(ROOT, 'commitlint.config.mjs')
 const HELP = `Usage: ebalzan-ci <command> [options]
 
 Commands:
-  sync           Push variables, secrets, settings and rulesets to a repo (or --all)
+  sync           Push variables, secrets, settings and rulesets to this repo
   onboard        Add the shared workflows, hook and rules to a repo, then sync it
   commit-msg     Validate a commit message (the husky commit-msg hook calls this)
   path           Print the package directory (to read config/)
