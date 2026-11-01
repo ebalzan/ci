@@ -35,7 +35,8 @@ publish() {
     if [ -n "${CHANGELOG:-}" ]; then cat "$CHANGELOG"; fi
   } > "$body"
   [ -s "$body" ] || return 0
-  gh pr edit "$PR_URL" --body-file "$body" >/dev/null ||
+  # REST, not `gh pr edit`: see sync-metadata.sh.
+  gh api -X PATCH "repos/$GH_REPO/pulls/${PR_URL##*/}" -F "body=@$body" >/dev/null ||
     echo "::warning::Could not update the description."
 }
 
