@@ -1,6 +1,6 @@
 // The one Conventional Commits rule (commitlint), used by the husky commit-msg
 // hook (`ebalzan-ci commit-msg`) and by the PR check on the PR title and
-// every commit of the PR (actions/pr-check). The types come from
+// every commit of the PR (actions/pr-checks). The types come from
 // config/types.json.
 //
 // Deliberately no @commitlint/config-conventional: only the header shape is
@@ -16,7 +16,7 @@ const commitTypes = JSON.parse(
 export const types = Object.keys(commitTypes).filter(key => !key.startsWith('$'))
 
 // THE Conventional Commit header: commitlint parses with it, and the PR rules
-// (actions/pr-check) and the release title (scripts/release-title.mjs) read the
+// (actions/pr-checks) and the release title (scripts/release-title.mjs) read the
 // type and the `!` with it. Not anchored at the end: it also runs on whole
 // multi-line commit messages.
 export const HEADER_PATTERN = /^(?<type>\w*)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?: (?<subject>.+)/

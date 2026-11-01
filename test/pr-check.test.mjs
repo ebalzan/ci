@@ -1,10 +1,10 @@
-// What every PR needs, whatever its kind (actions/pr-check/rules.mjs), on plain
+// What every PR needs, whatever its kind (actions/pr-checks/rules.mjs), on plain
 // objects: the AUTO_* knobs, then assignee, milestone, board and description.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { checkTracking, prConfig } from '../actions/pr-check/rules.mjs'
+import { checkTracking, prConfig } from '../actions/pr-checks/rules.mjs'
 
 const config = { ...prConfig({}), projectOwner: 'me' }
 

@@ -62,12 +62,11 @@
     "@commitlint/cli": "21.2.3"
   },
   "devDependencies": {
-    "@ebalzan/ci": "^3.0.0",
     "@ebalzan/config": "0.1.0",
     "danger": "14.0.7",
     "eslint": "10.14.0",
     "git-cliff": "2.14.2",
-    "husky": "^9.1.7",
+    "husky": "9.1.7",
     "prettier": "3.9.10"
   },
   "prettier": "@ebalzan/config/prettier"

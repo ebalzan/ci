@@ -4,7 +4,7 @@ import { appendFileSync, existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { gitRepo, isolatedEnv, runCli } from './helpers.mjs'
+import { gitRepo, isolatedEnv, ROOT, runCli } from './helpers.mjs'
 
 const WORKFLOWS = ['auto-pr.yml', 'pr-checks.yml', 'release.yml']
 
@@ -37,7 +37,8 @@ test('--no-push renders every template and commits locally', t => {
   for (const name of WORKFLOWS) {
     const text = readFileSync(join(dir, '.github', 'workflows', name), 'utf8')
     assert.doesNotMatch(text, /__[A-Z_]+__/, `${name} has an unfilled placeholder`)
-    assert.match(text, /uses: ebalzan\/ci\/\.github\/workflows\/[a-z-]+\.yml@v9/, name)
+    assert.match(text, /uses: ebalzan\/ci\/actions\/[a-z-]+@v9/, name)
+    assert.doesNotMatch(text, /ebalzan\/ci\/\.github\//, `${name} calls a workflow of the CI repo`)
     assert.match(text, /runs-on: self-hosted/, name)
   }
   // deploy.yml is the repo's own: it calls nothing shared.
@@ -227,4 +228,28 @@ test('--no-config and non-Node repos get no style wiring', t => {
   const plain = gitRepo(t, env)
   const plan = runCli(['onboard', '-C', plain.dir, '--dry-run', '--no-push'], { env })
   assert.match(plan.stdout, /skip +eslint\.config\.mjs \(no package\.json\)/)
+})
+
+test('refuses to onboard the CI repo itself', t => {
+  const env = isolatedEnv(t)
+  // This checkout, a clone of it (by package name) and a repo named by its slug.
+  const own = runCli(['onboard', '-C', ROOT, '--dry-run', '--no-push'], { env })
+  assert.equal(own.status, 1)
+  assert.match(own.stderr, /is ebalzan\/ci itself, which is not onboarded/)
+
+  const clone = gitRepo(t, env, {
+    'package.json': '{ "name": "@ebalzan/ci", "version": "1.0.0" }\n',
+  })
+  const byName = runCli(['onboard', '-C', clone.dir, '--dry-run', '--no-push'], { env })
+  assert.equal(byName.status, 1)
+  assert.match(byName.stderr, /itself, which is not onboarded/)
+
+  const other = gitRepo(t, env)
+  const bySlug = runCli(
+    ['onboard', '-C', other.dir, '-R', 'EBalzan/CI', '--dry-run', '--no-push'],
+    { env },
+  )
+  assert.equal(bySlug.status, 1)
+  assert.match(bySlug.stderr, /itself, which is not onboarded/)
+  assert.equal(other.git('branch', '--show-current').trim(), 'main')
 })

@@ -7,7 +7,7 @@
 //
 // Two ways in:
 //   import { releaseTitle } from './release-title.mjs'   (tests)
-//   node scripts/release-title.mjs                       (actions/auto-pr, actions/pr-check,
+//   node scripts/release-title.mjs                       (actions/auto-pr, actions/pr-checks,
 //                                                         actions/release)
 // The second prints the title for the checkout in the current directory, or
 // nothing when there is no Conventional Commit to release.

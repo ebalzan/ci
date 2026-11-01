@@ -1,6 +1,6 @@
 # Cuts the release the merged dev → main release PR stands for. Runs on the
-# pull_request `closed` event of that PR (.github/workflows/release.yml checks it
-# was merged and its head is dev):
+# pull_request `closed` event of that PR (the calling job checks it was merged
+# and its head is dev):
 #
 #   1. Install git-cliff  the root package.
 #   2. Verify merge       the PR was merged with a merge commit whose second
@@ -24,8 +24,9 @@
 #                         sync-dev.sh.
 #
 # Needs a full-history checkout of the merge commit with push credentials, Node
-# >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH. Called by
-# .github/workflows/release.yml.
+# >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH. Used by
+# templates/.github/workflows/release.yml (onboarded repos) and
+# .github/workflows/self-release.yml (this repo).
 name: Release
 description: Version, tag and publish the GitHub Release of a merged dev → main release PR, then bring dev up to main.
 inputs:
