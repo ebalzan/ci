@@ -1,3 +1,5 @@
-# Generated: tsc output (committed for the actions) and the lockfile.
-actions/auto-work-items/dist/
+# Generated: the lockfiles.
 package-lock.json
+
+# Claude prompts: Prettier would read the __PLACEHOLDERS__ as bold.
+actions/*/*-prompt.md

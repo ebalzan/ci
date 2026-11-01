@@ -1,35 +1,34 @@
-// The commit types are written down in three places that must agree: the
-// managed validator (hook + PR title), release-utils (bumps and branch types)
-// and auto-work-items' TYPE_CONFIG (labels, priorities). Plus the shipped JSON
-// rules must be valid for the GitHub API shapes the bootstrap sends.
+// THE list of work types (config/types.json) must be well-formed and is
+// what every reader sees. Plus the shipped JSON rules must be valid for the
+// GitHub API shapes `sync` sends.
 
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { deepMerge, diffTopLevel, stripDocKeys } from '../bin/_json.mjs'
-import { branchReleaseTypes } from '../scripts/release/release-utils.mjs'
+import { deepMerge, diffTopLevel, stripDocKeys } from '../lib/config.mjs'
+import commitlintConfig, { types } from '../commitlint.config.mjs'
 import { ROOT } from './helpers.mjs'
 
-const require = createRequire(import.meta.url)
-
-function validatorTypes() {
-  const sh = readFileSync(
-    join(ROOT, 'managed', 'scripts', 'release', 'validate-conventional-subject.sh'),
-    'utf8',
+test('types.json: release, color, minor types first; every reader sees it', () => {
+  const fromFile = stripDocKeys(
+    JSON.parse(readFileSync(join(ROOT, 'config', 'types.json'), 'utf8')),
   )
-  const match = sh.match(/commit_regex='\^\(([^)]+)\)/)
-  assert.ok(match, 'commit_regex not found in the validator')
-  return match[1].split('|').sort()
-}
+  const order = Object.keys(fromFile)
+  const releases = order.map(type => fromFile[type].release)
+  for (const [type, { release, color }] of Object.entries(fromFile)) {
+    assert.ok(['minor', 'patch'].includes(release), `${type}: release must be minor or patch`)
+    assert.match(color, /^[0-9A-F]{6}$/, `${type}: label color`)
+  }
+  assert.deepEqual(
+    releases,
+    [...releases].sort((a, b) => (a === b ? 0 : a === 'minor' ? -1 : 1)),
+    'minor types come first: the release PR title takes the first type present',
+  )
 
-test('validator, release-utils and TYPE_CONFIG list the same types', () => {
-  const { TYPE_CONFIG } = require('../actions/auto-work-items/dist/config.js')
-  const fromValidator = validatorTypes()
-  assert.deepEqual([...branchReleaseTypes.keys()].sort(), fromValidator)
-  assert.deepEqual(Object.keys(TYPE_CONFIG).sort(), fromValidator)
+  assert.deepEqual(types, order)
+  assert.deepEqual(commitlintConfig.rules['type-enum'][2], order)
 })
 
 test('deepMerge: objects merge, arrays and scalars are replaced', () => {
@@ -67,19 +66,46 @@ test('shipped rulesets are well-formed and managed', () => {
   }
 })
 
-test('dev stays force-pushable: sync-dev depends on it', () => {
-  const dir = join(ROOT, 'config', 'rulesets')
-  for (const file of readdirSync(dir).filter(name => name.endsWith('.json'))) {
-    const ruleset = JSON.parse(readFileSync(join(dir, file), 'utf8'))
-    if (ruleset.enforcement !== 'active') continue
-    const coversDev = ruleset.conditions.ref_name.include.includes('refs/heads/dev')
-    const blocksForcePush = ruleset.rules.some(rule => rule.type === 'non_fast_forward')
-    assert.ok(!(coversDev && blocksForcePush), `${file} would break release.yml's sync-dev`)
+const ruleset = file => JSON.parse(readFileSync(join(ROOT, 'config', 'rulesets', file), 'utf8'))
+const mergeMethods = ({ rules }) =>
+  rules.find(rule => rule.type === 'pull_request').parameters.allowed_merge_methods
+
+test('main and dev are never force-pushed: the release only moves them forward', () => {
+  for (const [file, ref] of [
+    ['protect-main.json', 'refs/heads/main'],
+    ['protect-dev.json', 'refs/heads/dev'],
+  ]) {
+    const { enforcement, conditions, rules } = ruleset(file)
+    assert.equal(enforcement, 'active', file)
+    assert.deepEqual(conditions.ref_name.include, [ref], file)
+    assert.ok(
+      rules.some(rule => rule.type === 'non_fast_forward'),
+      file,
+    )
   }
 })
 
-test('repo settings force PR-title squash commits', () => {
+test('work PRs squash into dev; the release PR merge-commits into main', () => {
+  const dev = ruleset('require-pull-request.json')
+  assert.deepEqual(dev.conditions.ref_name.include, ['refs/heads/dev'])
+  assert.deepEqual(mergeMethods(dev), ['squash'])
+  const main = ruleset('require-release-pr.json')
+  assert.deepEqual(main.conditions.ref_name.include, ['refs/heads/main'])
+  assert.deepEqual(mergeMethods(main), ['merge'])
+  // The release commit and the dev sync are pushed with GITHUB_TOKEN.
+  for (const { bypass_actors } of [dev, main]) {
+    assert.ok(
+      bypass_actors.some(actor => actor.actor_type === 'Integration' && actor.actor_id === 15368),
+    )
+  }
+})
+
+test('repo settings: PR-title squash commits, default merge commits, no rebase', () => {
   const settings = JSON.parse(readFileSync(join(ROOT, 'config', 'repo-settings.json'), 'utf8'))
   assert.equal(settings.allow_squash_merge, true)
   assert.equal(settings.squash_merge_commit_title, 'PR_TITLE')
+  assert.equal(settings.allow_merge_commit, true)
+  // `Merge pull request #N from …`: commitlint and git-cliff skip it.
+  assert.equal(settings.merge_commit_title, 'MERGE_MESSAGE')
+  assert.equal(settings.allow_rebase_merge, false)
 })

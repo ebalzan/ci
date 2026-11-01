@@ -1,0 +1,3 @@
+# Conventional Commits check for every local commit — this repo's own CLI, at
+# the checked-out commit. The same rule runs on every PR title and commit in CI.
+exec node bin/cli.mjs commit-msg "$1"
