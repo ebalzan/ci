@@ -64,7 +64,7 @@ test('a Node repo also gets the executable husky hook', t => {
   assert.ok(statSync(hook).mode & 0o111, 'hook is executable')
   const text = readFileSync(hook, 'utf8')
   assert.match(text, /node_modules\/\.bin\/ebalzan-ci/)
-  assert.match(text, /\.\.\/ci\}/)
+  assert.doesNotMatch(text, /CI_DIR|bin\/cli\.mjs/, 'no sibling-checkout fallback')
   assert.doesNotMatch(text, /__[A-Z_]+__/)
 })
 

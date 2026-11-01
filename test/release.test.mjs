@@ -102,7 +102,6 @@ test('release: bumps package.json in a release commit, tags it, pushes main and 
   const result = run(t, ctx, 'release.sh')
   assert.equal(result.status, 0, result.log)
   assert.equal(result.output.tag, 'v1.4.0')
-  assert.equal(result.output.version, '1.4.0')
 
   assert.equal(originGit(ctx, 'rev-parse', 'main'), result.output.sha)
   assert.equal(originGit(ctx, 'rev-parse', 'v1.4.0^{commit}'), result.output.sha)

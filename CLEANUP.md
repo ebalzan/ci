@@ -118,6 +118,17 @@ Severity: **High** = fix before the next release · **Medium** = real duplicatio
 | 3.7 | `scripts/shared-vars.mjs:97-100`                                   | When `GITHUB_ENV` is unset, it prints the `KEY<<delimiter` blocks to stdout. Only useful for debugging; nothing calls it that way.                                                              | Remove it, or print plain `KEY=value`.                                                                                      |
 | 3.8 | `templates/.husky/commit-msg:10-14`                                | The fallback to a sibling checkout (`CI_DIR` / `../ci`). The `node_modules/.bin` path already covers onboarded Node repos, and only Node repos get the hook.                                    | Remove, unless you work with sibling checkouts without installing the package.                                              |
 
+**Status:**
+
+- 3.1 done. `bootstrap` is gone from `bin/cli.mjs`, and from the `--help` test.
+- 3.2 done. `path` is gone from the CLI and its help, and its test is removed. The help test now checks `version` instead.
+- 3.3 kept, as suggested. The `OBSOLETE` comment in `lib/onboard.mjs` says to drop it in v5.
+- 3.4 done. `release.yml` was not restored; the template's `release` job passes on `tag` and `sha` only. The `version` output is gone from `actions/release/action.yml`, and `release.sh` no longer writes it.
+- 3.5 kept. `auto-pr` has the same input and its caller does set it, so removing it from the other two would make the three actions differ. It also lets a caller publish the Release with a PAT, so `release: published` workflows run.
+- 3.6 done. `PLACEHOLDER = /xxxx/i`.
+- 3.7 done, second option. Without `GITHUB_ENV`, `shared-vars.mjs` prints plain `KEY=value` lines. New test in `test/shared-vars.test.mjs`.
+- 3.8 done. The hook only tries `node_modules/.bin/ebalzan-ci`. `onboard` no longer renders `__CI_REPO_NAME__` (nothing else used it), and the test env no longer clears `CI_DIR`.
+
 ---
 
 ## 4. Stale or wrong documentation

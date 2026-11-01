@@ -11,6 +11,7 @@
 //   node scripts/shared-vars.mjs                          (the first step of every action)
 // The second applies them to a copy of the environment and appends every key it
 // set to $GITHUB_ENV, so the job's later steps see them as plain env vars.
+// Without $GITHUB_ENV (run by hand) it prints them as KEY=value instead.
 
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
@@ -106,7 +107,7 @@ function main() {
     Object.entries(env).filter(([key, value]) => process.env[key] !== value),
   )
   if (!process.env.GITHUB_ENV) {
-    console.log(toGithubEnv(changed))
+    for (const [key, value] of Object.entries(changed)) console.log(`${key}=${value}`)
     return
   }
   appendFileSync(process.env.GITHUB_ENV, toGithubEnv(changed))

@@ -25,7 +25,6 @@ Commands:
   sync           Push variables, secrets, settings and rulesets to this repo
   onboard        Add the shared workflows, hook and rules to a repo, then sync it
   commit-msg     Validate a commit message (the husky commit-msg hook calls this)
-  path           Print the package directory (to read config/)
   version        Print the package version
   help           Show this help
 
@@ -77,15 +76,11 @@ async function main(argv) {
   const [command, ...args] = argv
   switch (command) {
     case 'sync':
-    case 'bootstrap': // the 3.x name, still written in onboarded repos
       return sync(args)
     case 'onboard':
       return onboard(args)
     case 'commit-msg':
       return commitMsg(args)
-    case 'path':
-      console.log(ROOT)
-      return 0
     case 'version':
     case '--version':
     case '-v':

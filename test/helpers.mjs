@@ -35,7 +35,7 @@ export function isolatedEnv(t) {
     GIT_COMMITTER_EMAIL: 'test@example.com',
     NO_COLOR: '1',
   }
-  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'CI_DIR']) {
+  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN']) {
     delete env[key]
   }
   // Never the operator's real config/secrets.env: an empty shared secrets dir.
