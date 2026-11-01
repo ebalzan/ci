@@ -5,7 +5,7 @@
 // objects. The title and commit FORMAT is commitlint's job (the steps before
 // Danger); these rules cover what commitlint cannot see.
 
-export const TITLE_PATTERN = /^(\w+)(?:\([^)]+\))?(!)?: \S/
+export { HEADER_PATTERN as TITLE_PATTERN } from '../../commitlint.config.mjs'
 const DEFAULT_MAX_CHANGED_LINES = 500
 
 // The AUTO_* knobs the rules read (repo variables over config/actions.env).

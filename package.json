@@ -18,7 +18,7 @@
     "renovate-preset",
     "devops"
   ],
-  "homepage": "https://github.com/ebalzan/ci#readme",
+  "homepage": "https://github.com/ebalzan/ci",
   "bugs": {
     "url": "https://github.com/ebalzan/ci/issues"
   },
@@ -37,7 +37,6 @@
     "lib/",
     "templates/",
     "renovate/",
-    "docs/",
     "commitlint.config.mjs",
     "config/actions.env",
     "config/types.json",

@@ -44,7 +44,7 @@ export function checkWorkPr({
   }
 
   const title = pr.title.match(TITLE_PATTERN)
-  if (branchOk && title?.[1] !== branchType) {
+  if (branchOk && title?.groups.type !== branchType) {
     fails.push(
       `The title must start with ${code(`${branchType}:`)} (or ${code(`${branchType}(scope):`)}, ` +
         `${code(`${branchType}!:`)} for a breaking change) to match branch ${code(pr.head)}: ` +
@@ -81,8 +81,8 @@ export function checkWorkPr({
   }
 
   const breakingCommit = commitMessages.find(message => BREAKING_FOOTER.test(message))
-  if (title?.[2] || breakingCommit) {
-    const why = title?.[2]
+  if (title?.groups.breaking || breakingCommit) {
+    const why = title?.groups.breaking
       ? `the title's ${code('!')}`
       : `the BREAKING CHANGE footer in ${code(breakingCommit.split('\n')[0])}`
     warnings.push(

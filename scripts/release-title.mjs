@@ -13,19 +13,15 @@
 // nothing when there is no Conventional Commit to release.
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+import { HEADER_PATTERN, types } from '../commitlint.config.mjs'
+
 const ROOT = new URL('../', import.meta.url)
 const GIT_CLIFF = fileURLToPath(new URL('node_modules/.bin/git-cliff', ROOT))
 const CLIFF_CONFIG = fileURLToPath(new URL('config/cliff.toml', ROOT))
-const TYPES = Object.keys(
-  JSON.parse(readFileSync(new URL('config/types.json', ROOT), 'utf8')),
-).filter(key => !key.startsWith('$'))
-
-const HEADER = /^(\w+)(?:\([^)]*\))?!?: /
 
 /**
  * @param version  the next version, with or without the `v`
@@ -34,8 +30,10 @@ const HEADER = /^(\w+)(?:\([^)]*\))?!?: /
  */
 export function releaseTitle({ version, commits }) {
   if (!version || commits.length === 0) return ''
-  const present = new Set(commits.map(commit => commit.raw_message.match(HEADER)?.[1]))
-  const type = TYPES.find(candidate => present.has(candidate)) ?? 'chore'
+  const present = new Set(
+    commits.map(commit => commit.raw_message.match(HEADER_PATTERN)?.groups.type),
+  )
+  const type = types.find(candidate => present.has(candidate)) ?? 'chore'
   const breaking = commits.some(commit => commit.breaking)
   return `${type}${breaking ? '!' : ''}: release v${version.replace(/^v/, '')}`
 }

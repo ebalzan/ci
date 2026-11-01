@@ -15,11 +15,17 @@ const commitTypes = JSON.parse(
 )
 export const types = Object.keys(commitTypes).filter(key => !key.startsWith('$'))
 
+// THE Conventional Commit header: commitlint parses with it, and the PR rules
+// (actions/pr-check) and the release title (scripts/release-title.mjs) read the
+// type and the `!` with it. Not anchored at the end: it also runs on whole
+// multi-line commit messages.
+export const HEADER_PATTERN = /^(?<type>\w*)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?: (?<subject>.+)/
+
 export default {
   parserPreset: {
     parserOpts: {
-      headerPattern: /^(\w*)(?:\(([^)]+)\))?!?: (.+)$/,
-      headerCorrespondence: ['type', 'scope', 'subject'],
+      headerPattern: HEADER_PATTERN,
+      headerCorrespondence: ['type', 'scope', 'breaking', 'subject'],
     },
   },
   rules: {
@@ -27,5 +33,4 @@ export default {
     'type-enum': [2, 'always', types],
     'subject-empty': [2, 'never'],
   },
-  helpUrl: 'https://github.com/ebalzan/ci/blob/main/docs/COMMIT_GUIDE.md',
 }
