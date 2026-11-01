@@ -37,7 +37,8 @@ test('--no-push renders every template and commits locally', t => {
   for (const name of WORKFLOWS) {
     const text = readFileSync(join(dir, '.github', 'workflows', name), 'utf8')
     assert.doesNotMatch(text, /__[A-Z_]+__/, `${name} has an unfilled placeholder`)
-    assert.match(text, /uses: ebalzan\/ci\/\.github\/workflows\/[a-z-]+\.yml@v9/, name)
+    assert.match(text, /uses: ebalzan\/ci\/actions\/[a-z-]+@v9/, name)
+    assert.doesNotMatch(text, /ebalzan\/ci\/\.github\//, `${name} calls a workflow of the CI repo`)
     assert.match(text, /runs-on: self-hosted/, name)
   }
   // deploy.yml is the repo's own: it calls nothing shared.

@@ -33,7 +33,8 @@
 #
 # Needs a full-history checkout of the pushed branch (with tags, for the release
 # PR), Node >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH +
-# REPO_VARS_JSON. Called by .github/workflows/auto-pr.yml.
+# REPO_VARS_JSON. Used by templates/.github/workflows/auto-pr.yml (onboarded
+# repos) and .github/workflows/self-auto-pr.yml (this repo).
 name: Auto PR
 description: Open or update the PR of a work branch, or the release PR of dev, with label, assignee, milestone, board and an AI description.
 inputs:
