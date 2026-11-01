@@ -14,9 +14,10 @@
 #                         must equal the PR title; vX.Y.Z comes from it. With a
 #                         package.json, a `chore(release): X.Y.Z` commit bumps
 #                         it (and the lockfile); the tag goes on that commit,
-#                         else on the merge commit. Main and the tag are pushed
-#                         together. A re-run finds the tag and skips this.
-#                         release.sh.
+#                         else on the merge commit. Main, the tag and the
+#                         moving major tag vX (what callers pin) are pushed
+#                         together. A re-run finds the tag and skips this, but
+#                         for a missing or older vX. release.sh.
 #   4. Publish            the GitHub Release vX.Y.Z, its notes the PR's
 #                         description (AI summary + changelog), else the
 #                         git-cliff changelog. publish.sh.

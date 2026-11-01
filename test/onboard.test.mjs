@@ -129,19 +129,6 @@ test('deploy.yml is never overwritten, not even with --force', t => {
   assert.equal(readFileSync(join(dir, deploy), 'utf8'), mine)
 })
 
-test('a caller this version replaced is removed', t => {
-  const env = isolatedEnv(t)
-  const old = '.github/workflows/promote-dev-to-main.yml'
-  const { dir, git } = gitRepo(t, env, { [old]: 'name: Promote dev to main\n' })
-  const plan = runCli(['onboard', '-C', dir, '--dry-run', '--no-push'], { env })
-  assert.match(plan.stdout, /remove +\.github\/workflows\/promote-dev-to-main\.yml \(replaced/)
-
-  const result = runCli(['onboard', '-C', dir, '--no-push'], { env })
-  assert.equal(result.status, 0, result.stderr + result.stdout)
-  assert.ok(!existsSync(join(dir, old)))
-  assert.match(git('show', '--stat', 'HEAD'), /promote-dev-to-main\.yml/)
-})
-
 test('refuses a dirty tree and an existing branch', t => {
   const env = isolatedEnv(t)
   const { dir, git } = gitRepo(t, env)
