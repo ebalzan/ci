@@ -25,8 +25,7 @@
 #
 # Needs a full-history checkout of the merge commit with push credentials, Node
 # >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH. Used by
-# templates/.github/workflows/release.yml (onboarded repos) and
-# .github/workflows/self-release.yml (this repo).
+# templates/.github/workflows/release.yml (onboarded repos).
 name: Release
 description: Version, tag and publish the GitHub Release of a merged dev → main release PR, then bring dev up to main.
 inputs:

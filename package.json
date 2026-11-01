@@ -52,6 +52,7 @@
   },
   "scripts": {
     "check": "for f in lib/*.sh actions/*/*.sh; do bash -n \"$f\" || exit 1; done && for f in bin/*.mjs lib/*.mjs scripts/*.mjs actions/*/*.mjs actions/*/*/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
+    "lint": "eslint --max-warnings 0 .",
     "test": "node --test 'test/*.test.mjs'",
     "gh:sync": "node bin/cli.mjs sync",
     "format": "prettier --write .",
@@ -62,7 +63,7 @@
     "@commitlint/cli": "21.2.3"
   },
   "devDependencies": {
-    "@ebalzan/config": "0.1.0",
+    "@ebalzan/config": "0.2.0",
     "danger": "14.0.7",
     "eslint": "10.14.0",
     "git-cliff": "2.14.2",
