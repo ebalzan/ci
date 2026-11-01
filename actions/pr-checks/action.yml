@@ -28,8 +28,7 @@
 #
 # Needs a full-history checkout of the PR head, Node, and the job env
 # REPO_VARS_JSON (the caller's `vars`) + AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH.
-# Used by templates/.github/workflows/pr-checks.yml (onboarded repos) and
-# .github/workflows/self-pr-checks.yml (this repo).
+# Used by templates/.github/workflows/pr-checks.yml (onboarded repos).
 name: PR Check
 description: Validate a work PR or the release PR — title, commits and PR metadata.
 inputs:
