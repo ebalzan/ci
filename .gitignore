@@ -4,3 +4,8 @@ node_modules/
 /config/secrets.*.env
 # npm pack output.
 *.tgz
+
+# Actions secrets, pushed by `ebalzan-ci sync`. Never commit them.
+/.github/secrets.env
+/.github/secrets.*.env
+!/.github/secrets*.env.example

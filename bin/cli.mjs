@@ -28,8 +28,7 @@ Commands:
   version        Print the package version
   help           Show this help
 
-Run 'ebalzan-ci <command> --help' for a command's options.
-Docs: https://github.com/ebalzan/ci#readme`
+Run 'ebalzan-ci <command> --help' for a command's options.`
 
 function version() {
   return JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version

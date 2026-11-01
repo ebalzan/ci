@@ -64,7 +64,7 @@ export function checkReleasePr({
     )
   }
 
-  if (TITLE_PATTERN.exec(releaseTitle)?.[2]) {
+  if (TITLE_PATTERN.exec(releaseTitle)?.groups.breaking) {
     warnings.push('Merging this releases a new **major** version. Make sure that is intended.')
   }
 

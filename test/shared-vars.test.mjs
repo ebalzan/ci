@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { applySharedVars, parseEnvFile } from '../scripts/shared-vars.mjs'
+import { parseEnvFile } from '../lib/config.mjs'
+import { applySharedVars } from '../scripts/shared-vars.mjs'
 import { ROOT, tempDir, writeFile } from './helpers.mjs'
 
 const quiet = { info() {}, warning() {} }

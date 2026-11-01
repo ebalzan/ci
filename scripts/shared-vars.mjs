@@ -18,8 +18,6 @@ import { fileURLToPath } from 'node:url'
 
 import { parseEnvFile } from '../lib/config.mjs'
 
-export { parseEnvFile }
-
 const SHARED_VARS_FILE = fileURLToPath(new URL('../config/actions.env', import.meta.url))
 
 // The caller repo's variables, passed whole by the workflows as

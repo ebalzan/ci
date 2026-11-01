@@ -1,5 +1,5 @@
 {
-  "$comment": "dev is the integration branch: it cannot be deleted or force-pushed. The Release workflow only fast-forwards it (or merges main into it), so nothing in the pipeline needs a bypass. Reference: docs/REPO_RULES.md.",
+  "$comment": "dev is the integration branch: it cannot be deleted or force-pushed. The Release workflow only fast-forwards it (or merges main into it), so nothing in the pipeline needs a bypass.",
   "name": "ci: protect dev",
   "target": "branch",
   "enforcement": "active",
