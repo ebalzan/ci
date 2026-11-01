@@ -45,11 +45,12 @@ if [ -z "$pr" ]; then
   echo "::notice::Opened $url: $title"
 else
   url="$(jq -r .url <<< "$pr")"
-  # Only what changed: every edit is a PR event that re-runs PR Checks.
+  # Only what changed: every edit is a PR event that re-runs PR Checks. REST,
+  # not `gh pr edit`: see sync-metadata.sh.
   edit=()
-  [ "$(jq -r .title <<< "$pr")" = "$title" ] || edit+=(--title "$title")
-  [ "${DESCRIBE:-false}" = true ] || edit+=(--body-file "$changelog")
-  [ ${#edit[@]} -eq 0 ] || gh pr edit "$url" "${edit[@]}" >/dev/null
+  [ "$(jq -r .title <<< "$pr")" = "$title" ] || edit+=(-f "title=$title")
+  [ "${DESCRIBE:-false}" = true ] || edit+=(-F "body=@$changelog")
+  [ ${#edit[@]} -eq 0 ] || gh api -X PATCH "repos/$GH_REPO/pulls/${url##*/}" "${edit[@]}" >/dev/null
   echo "::notice::$url: $title"
 fi
 echo "url=$url" >> "$GITHUB_OUTPUT"
