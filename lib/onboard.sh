@@ -47,7 +47,8 @@
 #   -h, --help             Show this help
 #
 # Requirements: git; gh authenticated with admin on the repo (not needed with
-# --no-push or --dry-run); npm for a Node repo.
+# --no-push or --dry-run); npm for a Node repo. The CI repo itself is refused:
+# it runs its own self-*.yml workflows.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -154,6 +155,16 @@ fi
 if [[ -z "$REPO" ]] && command -v gh >/dev/null 2>&1; then REPO="$(detect_repo "$REPO_DIR")"; fi
 if $PUSH && [[ -z "$REPO" ]]; then
   die "Could not determine the repo for $REPO_DIR. Pass --repo OWNER/REPO (or --no-push)."
+fi
+# The CI repo runs its own self-* workflows at the checked-out commit; the
+# callers would point it at a released copy of itself. Caught by its checkout,
+# its slug or its package name.
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+REPO_PACKAGE=""
+[[ ! -f "$REPO_DIR/package.json" ]] \
+  || REPO_PACKAGE="$(node -p 'require(process.argv[1]).name || ""' "$REPO_DIR/package.json" 2>/dev/null || true)"
+if [[ "$REPO_DIR" == "$CI_ROOT" || "$(lower "$REPO")" == "$(lower "$CI_REPO")" || "$REPO_PACKAGE" == "$CI_PACKAGE" ]]; then
+  die "$REPO_DIR is $CI_REPO itself, which is not onboarded: it runs its own .github/workflows/self-*.yml."
 fi
 if [[ -n "$(git_ status --porcelain)" ]] && ! $DRY_RUN; then
   die "$REPO_DIR has uncommitted changes. Commit or stash them first."
