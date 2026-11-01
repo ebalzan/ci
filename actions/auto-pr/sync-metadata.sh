@@ -3,7 +3,7 @@
 # sync-metadata.sh — the "Sync metadata" step of actions/auto-pr.
 #
 # Puts on the PR: its label (created when missing — a type label with its color
-# from config/types.json, or `release` on the release PR), the pusher as
+# from config/types.json via scripts/types.mjs, or `release` on the release PR), the pusher as
 # assignee, AUTO_MILESTONE_TITLE and the AUTO_PROJECT_NUMBER board. Each is
 # best-effort: a failure is a warning, and the PR check then names what is
 # missing.
@@ -13,9 +13,9 @@ set -uo pipefail
 
 if [ "$PR_LABEL" = release ]; then
   color=0E8A16
-  description="Release PR: ${AUTO_BASE_BRANCH:-dev} → ${AUTO_RELEASE_BRANCH:-main}"
+  description="Release PR: ${AUTO_BASE_BRANCH:?} → ${AUTO_RELEASE_BRANCH:?}"
 else
-  color="$(jq -r --arg t "$PR_LABEL" '.[$t].color' "$(dirname "${BASH_SOURCE[0]}")/../../config/types.json")"
+  color="$(node "$(dirname "${BASH_SOURCE[0]}")/../../scripts/types.mjs" color "$PR_LABEL")"
   description="Changes for '$PR_LABEL' branches"
 fi
 # Fails when the label exists — left as it is.

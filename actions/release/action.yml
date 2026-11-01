@@ -2,7 +2,9 @@
 # pull_request `closed` event of that PR (the calling job checks it was merged
 # and its head is dev):
 #
-#   1. Install git-cliff  the root package.
+#   1. Set up             CI_ROOT (this repo's copy) for the later steps; the
+#                         root package (git-cliff); the AUTO_* variables and
+#                         the branch defaults (scripts/shared-vars.mjs).
 #   2. Verify merge       the PR was merged with a merge commit whose second
 #                         parent is the PR's head: dev's commits reached main
 #                         unchanged, so dev can catch up without a force-push.
@@ -23,8 +25,9 @@
 #                         the next release PR starts from the release.
 #                         sync-dev.sh.
 #
-# Needs a full-history checkout of the merge commit with push credentials, Node
-# >= 22, and the job env AUTO_BASE_BRANCH + AUTO_RELEASE_BRANCH. Used by
+# Needs a full-history checkout of the merge commit with push credentials and
+# Node >= 22; AUTO_BASE_BRANCH and AUTO_RELEASE_BRANCH default to dev and main.
+# Used by
 # templates/.github/workflows/release.yml (onboarded repos).
 name: Release
 description: Version, tag and publish the GitHub Release of a merged dev → main release PR, then bring dev up to main.
@@ -48,9 +51,13 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install git-cliff
+    - name: Set up
       shell: bash
-      run: npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+      run: |
+        CI_ROOT="$(cd "$GITHUB_ACTION_PATH/../.." && pwd)"
+        echo "CI_ROOT=$CI_ROOT" >> "$GITHUB_ENV"
+        npm ci --ignore-scripts --no-audit --no-fund --prefix "$CI_ROOT"
+        node "$CI_ROOT/scripts/shared-vars.mjs"
 
     - name: Verify merge
       shell: bash

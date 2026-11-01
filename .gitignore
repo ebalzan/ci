@@ -5,6 +5,7 @@ node_modules/
 # npm pack output.
 *.tgz
 
+# templates/secrets.gitignore, as `ebalzan-ci onboard` adds it to every repo.
 # Actions secrets, pushed by `ebalzan-ci sync`. Never commit them.
 /.github/secrets.env
 /.github/secrets.*.env

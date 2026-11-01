@@ -67,7 +67,7 @@ test('commands print their own --help', () => {
   for (const [command, marker] of [
     ['sync', /Usage: ebalzan-ci sync/],
     ['bootstrap', /Usage: ebalzan-ci sync/],
-    ['onboard', /onboard\.sh — bring a repo under the shared rules/],
+    ['onboard', /Usage: ebalzan-ci onboard/],
   ]) {
     const result = runCli([command, '--help'])
     assert.equal(result.status, 0, command)

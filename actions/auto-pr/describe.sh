@@ -9,22 +9,22 @@
 # release-pr.sh). Best-effort: any failure is a warning and leaves a work PR's
 # description as it was, a release PR's as the changelog alone.
 #
+# The model and effort are AUTO_DESCRIBE_MODEL / AUTO_DESCRIBE_EFFORT, set in
+# config/actions.env only (a repo variable overrides them): no model is a
+# warning and no description; no effort leaves Claude Code's default.
+#
 # Env: GH_TOKEN, GH_REPO, ANTHROPIC_API_KEY, PR_URL, PR_KIND, PR_LABEL, CHANGELOG
 # (release PR only), CLAUDE_CODE (the pinned npm spec), plus the runner's
 # GITHUB_* and RUNNER_TEMP.
 set -uo pipefail
 
 if [ "${PR_KIND:-work}" = release ]; then
-  base="${AUTO_RELEASE_BRANCH:-main}"
+  base="${AUTO_RELEASE_BRANCH:?}"
   prompt_file=describe-release-prompt.md
 else
-  base="${AUTO_BASE_BRANCH:-dev}"
+  base="${AUTO_BASE_BRANCH:?}"
   prompt_file=describe-prompt.md
 fi
-model="${AUTO_DESCRIBE_MODEL:-claude-sonnet-5-5}"
-args=(--model "$model")
-# Haiku rejects the effort setting.
-[[ "$model" == claude-haiku* ]] || args+=(--effort "${AUTO_DESCRIBE_EFFORT:-low}")
 
 # publish SUMMARY — SUMMARY, then the changelog when there is one, as the
 # description.
@@ -49,6 +49,14 @@ give_up() {
   fi
   exit 0
 }
+
+model="${AUTO_DESCRIBE_MODEL:-}"
+[ -n "$model" ] || give_up "AUTO_DESCRIBE_MODEL is not set (config/actions.env)."
+args=(--model "$model")
+# Haiku rejects the effort setting.
+if [ -n "${AUTO_DESCRIBE_EFFORT:-}" ] && [[ "$model" != claude-haiku* ]]; then
+  args+=(--effort "$AUTO_DESCRIBE_EFFORT")
+fi
 
 prompt="$(< "$(dirname "${BASH_SOURCE[0]}")/$prompt_file")"
 prompt="${prompt//__BRANCH__/$GITHUB_REF_NAME}"

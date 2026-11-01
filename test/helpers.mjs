@@ -1,11 +1,16 @@
 // Shared helpers for the tests: throwaway git repos and a gh that is installed
-// but never authenticated, so nothing can reach a real GitHub account.
+// but never authenticated, so nothing can reach a real GitHub account; and the
+// fixtures of the PR-rule tests.
 
+import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { prConfig } from '../actions/pr-checks/rules.mjs'
+import { BRANCH_DEFAULTS } from '../scripts/shared-vars.mjs'
 
 export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 export const CLI = join(ROOT, 'bin', 'cli.mjs')
@@ -63,4 +68,19 @@ export function runCli(args, { env, cwd, input } = {}) {
     encoding: 'utf8',
   })
   return { status: result.status, stdout: result.stdout, stderr: result.stderr }
+}
+
+// ---- PR rules (actions/pr-checks) ------------------------------------------
+// prConfig() as the action sees it with no repo variables, the board owner
+// defaulted to the repo owner `me`.
+export const PR_CONFIG = Object.freeze({ ...prConfig(BRANCH_DEFAULTS), projectOwner: 'me' })
+
+// Asserts one fail matches PATTERN. RESULT is a rule's { fails, warnings }, or
+// the fails array itself.
+export function failsWith(result, pattern) {
+  const fails = Array.isArray(result) ? result : result.fails
+  assert.ok(
+    fails.some(message => pattern.test(message)),
+    `expected a fail matching ${pattern}, got: ${JSON.stringify(fails)}`,
+  )
 }

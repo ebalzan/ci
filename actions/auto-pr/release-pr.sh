@@ -6,7 +6,7 @@
 # Finds the open dev → main PR or opens a DRAFT one, and keeps its title on the
 # release merging it would cut: `<type>[!]: release vX.Y.Z`
 # (scripts/release-title.mjs, git-cliff). The body is the changelog of the
-# unreleased commits (config/cliff.toml); when the Describe step runs it puts a
+# unreleased commits (scripts/changelog.mjs); when the Describe step runs it puts a
 # summary above it, so here only a new PR gets the bare changelog. Writes to
 # GITHUB_OUTPUT:
 #   label      release
@@ -19,8 +19,8 @@
 set -euo pipefail
 
 ci_root="$(dirname "${BASH_SOURCE[0]}")/../.."
-head="${AUTO_BASE_BRANCH:-dev}"
-base="${AUTO_RELEASE_BRANCH:-main}"
+head="${AUTO_BASE_BRANCH:?}"
+base="${AUTO_RELEASE_BRANCH:?}"
 echo "label=release" >> "$GITHUB_OUTPUT"
 
 if [ "$(git rev-list --count "origin/$base..HEAD")" -eq 0 ]; then
@@ -35,11 +35,7 @@ if [ -z "$title" ]; then
 fi
 
 changelog="$RUNNER_TEMP/auto-pr-changelog.md"
-{
-  echo '## Changes'
-  NO_COLOR=1 "$ci_root/node_modules/.bin/git-cliff" --config "$ci_root/config/cliff.toml" \
-    --unreleased --bump --strip all
-} > "$changelog"
+node "$ci_root/scripts/changelog.mjs" --unreleased --bump > "$changelog"
 echo "changelog=$changelog" >> "$GITHUB_OUTPUT"
 
 pr="$(gh pr list --head "$head" --base "$base" --state open --json url,title --jq '.[0] // empty')"
