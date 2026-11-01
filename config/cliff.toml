@@ -1,7 +1,7 @@
 # git-cliff (https://git-cliff.org): the next version and the changelog of the
 # release PR, from the Conventional Commits on dev since the last vX.Y.Z tag.
 # Read by scripts/release-title.mjs (the title) and actions/auto-pr (the body);
-# actions/pr-check recomputes the title with it, actions/release recomputes it
+# actions/pr-checks recomputes the title with it, actions/release recomputes it
 # on main and falls back to it for the GitHub Release notes.
 #
 # The bump matches config/types.json: feat → minor, `!` or a BREAKING CHANGE

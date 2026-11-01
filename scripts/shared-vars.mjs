@@ -6,7 +6,7 @@
 //
 // Two ways in:
 //   import { applySharedVars } from './shared-vars.mjs'   (tests)
-//   node scripts/shared-vars.mjs                          (actions/auto-pr, actions/pr-check)
+//   node scripts/shared-vars.mjs                          (actions/auto-pr, actions/pr-checks)
 // The second applies them to a copy of the environment and appends every key it
 // set to $GITHUB_ENV, so the job's later steps see them as plain env vars.
 

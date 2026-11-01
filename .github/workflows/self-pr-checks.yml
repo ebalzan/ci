@@ -1,0 +1,119 @@
+# =============================================================================
+# PR Checks — this repo's own quality gate for every PR into dev or main.
+#
+#   Work PR / Release PR  The shared PR check (actions/pr-checks), used by LOCAL
+#                         path for the same reason as self-auto-pr.yml: the
+#                         reusable pr-check.yml names
+#                         ebalzan/ci/actions/pr-checks@vN, which does not exist
+#                         before the first vN release. The job names spell out
+#                         `pr-check / Work PR` and `pr-check / Release PR`, the
+#                         check names the shared rulesets require (what the
+#                         reusable workflow reports when called from a job
+#                         named `pr-check`). The other kind is skipped, as are
+#                         drafts.
+#   Validate              npm run check (syntax-checks the shell and Node
+#                         scripts), Prettier, the unit and CLI tests, and
+#                         npm pack --dry-run (the published package builds).
+#
+# The PR's metadata is part of the check, so it also re-runs when the title,
+# description, labels, milestone or assignees change.
+# =============================================================================
+name: PR Checks
+
+on:
+  pull_request:
+    branches: ['main', 'dev']
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - edited
+      - labeled
+      - unlabeled
+      - milestoned
+      - demilestoned
+      - assigned
+      - unassigned
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  AUTO_BASE_BRANCH: dev
+  AUTO_RELEASE_BRANCH: main
+  REPO_VARS_JSON: ${{ toJSON(vars) }}
+
+jobs:
+  work-pr:
+    name: pr-check / Work PR
+    if: ${{ github.event.pull_request.head.ref != 'dev' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: ./actions/pr-checks
+        with:
+          kind: work
+          project-token: ${{ secrets.GH_PROJECT_TOKEN }}
+
+  release-pr:
+    name: pr-check / Release PR
+    if: ${{ github.event.pull_request.head.ref == 'dev' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      # Full history with the tags: git-cliff computes the version from them.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: ./actions/pr-checks
+        with:
+          kind: release
+          project-token: ${{ secrets.GH_PROJECT_TOKEN }}
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Syntax-check the scripts
+        run: npm run check
+
+      - name: Format (Prettier, rules from @ebalzan/config)
+        run: npm run format:check
+
+      - name: Unit and CLI tests
+        run: npm test
+
+      - name: Package contents
+        run: npm pack --dry-run

@@ -1,12 +1,12 @@
-// The release-PR rules (actions/pr-check/release-pr/rules.mjs) on plain
+// The release-PR rules (actions/pr-checks/release-pr/rules.mjs) on plain
 // objects: what Danger fails or warns about for the dev → main PR. What every
 // PR needs (assignee, milestone, board, description) is pr-check.test.mjs's.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { checkReleasePr } from '../actions/pr-check/release-pr/rules.mjs'
-import { prConfig } from '../actions/pr-check/rules.mjs'
+import { checkReleasePr } from '../actions/pr-checks/release-pr/rules.mjs'
+import { prConfig } from '../actions/pr-checks/rules.mjs'
 
 const config = { ...prConfig({}), projectOwner: 'me' }
 

@@ -1,12 +1,12 @@
-// The work-PR rules (actions/pr-check/work-pr/rules.mjs) on plain objects: what
+// The work-PR rules (actions/pr-checks/work-pr/rules.mjs) on plain objects: what
 // Danger fails or warns about for a feat/fix/… PR into dev. What every PR needs
 // (assignee, milestone, board, description) is pr-check.test.mjs's.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { prConfig } from '../actions/pr-check/rules.mjs'
-import { checkWorkPr } from '../actions/pr-check/work-pr/rules.mjs'
+import { prConfig } from '../actions/pr-checks/rules.mjs'
+import { checkWorkPr } from '../actions/pr-checks/work-pr/rules.mjs'
 
 const config = { ...prConfig({}), projectOwner: 'me' }
 
