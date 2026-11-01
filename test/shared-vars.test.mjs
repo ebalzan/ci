@@ -65,3 +65,14 @@ test('run as a script, it appends what it set to $GITHUB_ENV', t => {
   assert.match(written, /^AUTO_DESCRIBE_MODEL<<(ghadelimiter_[\w-]+)\nclaude-sonnet-5-5\n\1$/m)
   assert.doesNotMatch(written, /^PATH</m, 'only the keys it set')
 })
+
+test('run without $GITHUB_ENV, it prints what it set as KEY=value', () => {
+  const result = spawnSync(process.execPath, [join(ROOT, 'scripts', 'shared-vars.mjs')], {
+    env: { PATH: process.env.PATH, REPO_VARS_JSON: '{"AUTO_PROJECT_NUMBER":"15"}' },
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /^AUTO_PROJECT_NUMBER=15$/m)
+  assert.match(result.stdout, /^AUTO_BASE_BRANCH=dev$/m)
+  assert.doesNotMatch(result.stdout, /ghadelimiter_/)
+})

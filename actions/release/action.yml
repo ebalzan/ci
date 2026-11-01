@@ -42,9 +42,6 @@ outputs:
   tag:
     description: The new vX.Y.Z tag.
     value: ${{ steps.release.outputs.tag }}
-  version:
-    description: The new version, X.Y.Z.
-    value: ${{ steps.release.outputs.version }}
   sha:
     description: The commit the tag points at.
     value: ${{ steps.release.outputs.sha }}

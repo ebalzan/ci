@@ -14,9 +14,8 @@
 # Main and the tag are pushed in one atomic push, a fast-forward: when main
 # moved meanwhile it is rejected and nothing is left half done. Writes to
 # GITHUB_OUTPUT:
-#   tag      vX.Y.Z
-#   version  X.Y.Z
-#   sha      the commit the tag points at
+#   tag  vX.Y.Z
+#   sha  the commit the tag points at
 #
 # Env: PR_TITLE, MERGE_SHA (the checked-out merge commit). Needs the root
 # package installed (git-cliff).
@@ -35,7 +34,7 @@ if [ -n "$version" ] && git rev-parse -q --verify "refs/tags/v$version" >/dev/nu
     echo "::error::$tag already exists and does not contain this merge: it was released from something else."
     exit 1
   fi
-  { echo "tag=$tag"; echo "version=$version"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
+  { echo "tag=$tag"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
   echo "::notice::$tag already exists ($sha); not tagging again."
   exit 0
 fi
@@ -51,7 +50,7 @@ if [ "$title" != "$PR_TITLE" ]; then
 fi
 version="$(version_of "$title")"
 tag="v$version"
-{ echo "tag=$tag"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
 git config user.name 'github-actions[bot]'
 git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
