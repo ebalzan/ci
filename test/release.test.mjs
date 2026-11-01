@@ -109,6 +109,7 @@ test('release: bumps package.json in a release commit, tags it, pushes main and 
   assert.equal(originGit(ctx, 'rev-parse', 'main^'), ctx.merge)
   const pkg = JSON.parse(originGit(ctx, 'show', 'main:package.json'))
   assert.equal(pkg.version, '1.4.0')
+  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), result.output.sha)
 
   // A re-run (a fresh checkout at the merge commit) finds the tag.
   const again = run(t, ctx, 'release.sh')
@@ -124,6 +125,35 @@ test('release: without package.json the merge commit itself is tagged', t => {
   assert.equal(result.status, 0, result.log)
   assert.equal(result.output.sha, ctx.merge)
   assert.equal(originGit(ctx, 'rev-parse', 'v1.4.0^{commit}'), ctx.merge)
+})
+
+test('release: the major tag moves to the release, and a re-run only ever moves it forward', t => {
+  const ctx = released(t)
+  ctx.git('tag', 'v1', 'v1.3.0')
+  ctx.git('push', '--quiet', 'origin', 'v1')
+  const result = run(t, ctx, 'release.sh')
+  assert.equal(result.status, 0, result.log)
+  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), ctx.merge)
+  assert.equal(
+    originGit(ctx, 'rev-parse', 'v1.3.0^{commit}'),
+    ctx.git('rev-parse', 'v1.3.0').trim(),
+  )
+
+  // Missing (a release tagged by hand): a re-run creates it.
+  ctx.git('push', '--quiet', 'origin', ':refs/tags/v1')
+  const created = run(t, ctx, 'release.sh')
+  assert.equal(created.status, 0, created.log)
+  assert.match(created.log, /Moved v1 to v1\.4\.0/)
+  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), ctx.merge)
+
+  // Ahead (a later release): a re-run of this one leaves it there.
+  ctx.git('commit', '--quiet', '--allow-empty', '-m', 'fix: later')
+  ctx.git('push', '--quiet', '--force', 'origin', 'HEAD:refs/tags/v1')
+  const later = ctx.git('rev-parse', 'HEAD').trim()
+  const again = run(t, ctx, 'release.sh')
+  assert.equal(again.status, 0, again.log)
+  assert.doesNotMatch(again.log, /Moved v1/)
+  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), later)
 })
 
 test('release: a PR title main does not compute releases nothing', t => {
