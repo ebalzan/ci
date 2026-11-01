@@ -52,6 +52,7 @@
   },
   "scripts": {
     "check": "for f in lib/*.sh actions/*/*.sh; do bash -n \"$f\" || exit 1; done && for f in bin/*.mjs lib/*.mjs scripts/*.mjs actions/*/*.mjs actions/*/*/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
+    "lint": "eslint --max-warnings 0 .",
     "test": "node --test 'test/*.test.mjs'",
     "gh:sync": "node bin/cli.mjs sync",
     "format": "prettier --write .",
