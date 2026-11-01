@@ -63,7 +63,7 @@
     "@commitlint/cli": "21.2.3"
   },
   "devDependencies": {
-    "@ebalzan/config": "0.1.0",
+    "@ebalzan/config": "0.2.0",
     "danger": "14.0.7",
     "eslint": "10.14.0",
     "git-cliff": "2.14.2",
