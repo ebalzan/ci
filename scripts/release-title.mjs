@@ -3,25 +3,28 @@
 // config/types.json's order (the minor types lead), `!` when a commit is
 // breaking. The version is git-cliff's (config/cliff.toml). Merged with a merge
 // commit, the release PR brings the same commits to main, where actions/release
-// recomputes the title and requires it to equal the PR's.
+// recomputes the title and requires it to equal the PR's. The format is built
+// and read back only here.
 //
 // Two ways in:
 //   import { releaseTitle } from './release-title.mjs'   (tests)
 //   node scripts/release-title.mjs                       (actions/auto-pr, actions/pr-checks,
 //                                                         actions/release)
-// The second prints the title for the checkout in the current directory, or
-// nothing when there is no Conventional Commit to release.
+//   node scripts/release-title.mjs --version-of TITLE    (actions/release)
+// The first prints the title for the checkout in the current directory, or
+// nothing when there is no Conventional Commit to release. The second prints
+// the X.Y.Z a release title names, or nothing when TITLE is not one.
 
-import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 import { HEADER_PATTERN, types } from '../commitlint.config.mjs'
+import { gitCliff } from './changelog.mjs'
 
-const ROOT = new URL('../', import.meta.url)
-const GIT_CLIFF = fileURLToPath(new URL('node_modules/.bin/git-cliff', ROOT))
-const CLIFF_CONFIG = fileURLToPath(new URL('config/cliff.toml', ROOT))
+// What releaseTitle() builds.
+export const RELEASE_TITLE_PATTERN =
+  /^(?<type>\w+)(?<breaking>!)?: release v(?<version>\d+\.\d+\.\d+)$/
 
 /**
  * @param version  the next version, with or without the `v`
@@ -38,28 +41,22 @@ export function releaseTitle({ version, commits }) {
   return `${type}${breaking ? '!' : ''}: release v${version.replace(/^v/, '')}`
 }
 
+// The X.Y.Z a release title names, or '' when TITLE is not one.
+export const releaseVersion = title => RELEASE_TITLE_PATTERN.exec(title)?.groups.version ?? ''
+
 // git-cliff's unreleased release for the checkout in `cwd`: { version, commits }.
 export function unreleased(cwd = process.cwd()) {
-  const context = execFileSync(
-    GIT_CLIFF,
-    ['--config', CLIFF_CONFIG, '--unreleased', '--bump', '--context'],
-    {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
-    },
-  )
-  const [release] = JSON.parse(context)
+  const [release] = JSON.parse(gitCliff(['--unreleased', '--bump', '--context'], { cwd }))
   return release ?? { version: null, commits: [] }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [flag, title = ''] = process.argv.slice(2)
   try {
-    const title = releaseTitle(unreleased())
-    if (title) console.log(title)
+    const out = flag === '--version-of' ? releaseVersion(title) : releaseTitle(unreleased())
+    if (out) console.log(out)
   } catch (error) {
-    console.error(`git-cliff failed:\n${error.stderr || error.message}`)
+    console.error(error.message)
     process.exit(1)
   }
 }

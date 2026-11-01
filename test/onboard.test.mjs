@@ -174,6 +174,19 @@ test('secrets files are gitignored, examples are not', t => {
   assert.match(git('show', '--stat', 'HEAD'), /\.gitignore/)
 })
 
+test("this repo's own .gitignore ends with the lines onboard adds", () => {
+  const snippet = readFileSync(join(ROOT, 'templates', 'secrets.gitignore'), 'utf8')
+  assert.ok(readFileSync(join(ROOT, '.gitignore'), 'utf8').endsWith(`\n${snippet}`))
+})
+
+test('the .gitignore lines are data, not a template file', t => {
+  const env = isolatedEnv(t)
+  const { dir } = gitRepo(t, env)
+  const plan = runCli(['onboard', '-C', dir, '--dry-run', '--no-push'], { env })
+  assert.equal(plan.status, 0, plan.stderr + plan.stdout)
+  assert.doesNotMatch(plan.stdout, /secrets\.gitignore/)
+})
+
 test('.gitignore is left alone when it already ignores the secrets', t => {
   const env = isolatedEnv(t)
   const { dir } = gitRepo(t, env, { '.gitignore': '.github/secrets*.env\n' })

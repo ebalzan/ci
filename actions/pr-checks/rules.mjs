@@ -9,11 +9,18 @@ export { HEADER_PATTERN as TITLE_PATTERN } from '../../commitlint.config.mjs'
 const DEFAULT_MAX_CHANGED_LINES = 500
 
 // The AUTO_* knobs the rules read (repo variables over config/actions.env).
+// The branches are required: scripts/shared-vars.mjs, the action's first step,
+// sets their defaults.
 export function prConfig(env) {
+  const required = key => {
+    const value = (env[key] ?? '').trim()
+    if (!value) throw new Error(`${key} is not set (scripts/shared-vars.mjs sets it).`)
+    return value
+  }
   const maxChangedLines = Number.parseInt(env.AUTO_MAX_CHANGED_LINES ?? '', 10)
   return {
-    baseBranch: (env.AUTO_BASE_BRANCH || 'dev').trim(),
-    releaseBranch: (env.AUTO_RELEASE_BRANCH || 'main').trim(),
+    baseBranch: required('AUTO_BASE_BRANCH'),
+    releaseBranch: required('AUTO_RELEASE_BRANCH'),
     milestoneTitle: (env.AUTO_MILESTONE_TITLE || '').trim(),
     projectNumber: Number.parseInt(env.AUTO_PROJECT_NUMBER ?? '', 10) || 0,
     projectOwner: (env.AUTO_PROJECT_OWNER || '').trim(),

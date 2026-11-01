@@ -5,10 +5,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { prConfig } from '../actions/pr-checks/rules.mjs'
 import { checkWorkPr } from '../actions/pr-checks/work-pr/rules.mjs'
-
-const config = { ...prConfig({}), projectOwner: 'me' }
+import { PR_CONFIG, failsWith } from './helpers.mjs'
 
 // A PR that passes every rule; each test changes one thing.
 function check({ pr = {}, ...rest } = {}) {
@@ -25,16 +23,9 @@ function check({ pr = {}, ...rest } = {}) {
       changedLines: 120,
       ...pr,
     },
-    config,
+    config: PR_CONFIG,
     ...rest,
   })
-}
-
-function failsWith(result, pattern) {
-  assert.ok(
-    result.fails.some(message => pattern.test(message)),
-    `expected a fail matching ${pattern}, got: ${JSON.stringify(result.fails)}`,
-  )
 }
 
 test('a complete PR passes with no warnings', () => {

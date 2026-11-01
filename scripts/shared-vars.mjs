@@ -1,12 +1,14 @@
 // The AUTO_* knobs every shared action reads: the caller repo's variables
 // first, then config/actions.env from the copy of this repo the runner
 // downloaded for `uses: ebalzan/ci/actions/<name>@<ref>` (the whole repo at
-// that ref). Nothing copies the shared values onto the calling repos, so a
-// shared value changes by moving the ref.
+// that ref), then BRANCH_DEFAULTS — the one place `dev` and `main` are the
+// default branches; the scripts after it require AUTO_BASE_BRANCH and
+// AUTO_RELEASE_BRANCH. Nothing copies the shared values onto the calling
+// repos, so a shared value changes by moving the ref.
 //
 // Two ways in:
 //   import { applySharedVars } from './shared-vars.mjs'   (tests)
-//   node scripts/shared-vars.mjs                          (actions/auto-pr, actions/pr-checks)
+//   node scripts/shared-vars.mjs                          (the first step of every action)
 // The second applies them to a copy of the environment and appends every key it
 // set to $GITHUB_ENV, so the job's later steps see them as plain env vars.
 
@@ -19,6 +21,10 @@ import { fileURLToPath } from 'node:url'
 import { parseEnvFile } from '../lib/config.mjs'
 
 const SHARED_VARS_FILE = fileURLToPath(new URL('../config/actions.env', import.meta.url))
+
+// Work PRs merge into AUTO_BASE_BRANCH; the release PR merges it into
+// AUTO_RELEASE_BRANCH. The workflow templates set both in the job env.
+export const BRANCH_DEFAULTS = { AUTO_BASE_BRANCH: 'dev', AUTO_RELEASE_BRANCH: 'main' }
 
 // The caller repo's variables, passed whole by the workflows as
 // `REPO_VARS_JSON: ${{ toJSON(vars) }}` — so a repo can set any AUTO_* knob,
@@ -51,26 +57,31 @@ export function applyRepoVars({ core, env }) {
 }
 
 // Repo variables first, then every AUTO_* knob still unset from
-// config/actions.env. A repo variable always wins; the code defaults still
-// apply to keys neither layer sets.
+// config/actions.env, then the branch defaults. A repo variable always wins.
 export function applySharedVars({ core, env, file = SHARED_VARS_FILE }) {
   applyRepoVars({ core, env })
 
-  if (!existsSync(file)) {
+  if (existsSync(file)) {
+    const applied = fillUnset(env, parseEnvFile(readFileSync(file, 'utf8')))
+    if (applied.length > 0) {
+      core.info(`Shared variables from config/actions.env: ${applied.join(', ')}`)
+    }
+  } else {
     core.warning(`Shared variables file not found at ${file}; using repo variables only.`)
-    return
   }
 
+  fillUnset(env, BRANCH_DEFAULTS)
+}
+
+// Sets each key of VARS that ENV leaves unset or blank; returns those keys.
+function fillUnset(env, vars) {
   const applied = []
-  for (const [key, value] of Object.entries(parseEnvFile(readFileSync(file, 'utf8')))) {
+  for (const [key, value] of Object.entries(vars)) {
     if ((env[key] ?? '').trim()) continue
     env[key] = value
     applied.push(key)
   }
-
-  if (applied.length > 0) {
-    core.info(`Shared variables from config/actions.env: ${applied.join(', ')}`)
-  }
+  return applied
 }
 
 // One $GITHUB_ENV entry per key, in the multiline form so no value can break

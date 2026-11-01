@@ -9,7 +9,7 @@ Severity: **High** = fix before the next release · **Medium** = real duplicatio
 ### 1.1 Two implementations of the Conventional Commits rule and the `commit-msg` CLI (High)
 
 - **Where:** this repo: `commitlint.config.mjs`, `config/types.json`, and `bin/cli.mjs` `commit-msg`. The other package: `@ebalzan/config/commit/index.js` and `ebalzan-config commit-msg`.
-- **What:** `@ebalzan/config` (a devDependency here, and installed into every onboarded Node repo by `onboard.sh`) ships:
+- **What:** `@ebalzan/config` (a devDependency here, and installed into every onboarded Node repo by `onboard`) ships:
   - its own `COMMIT_TYPES` list (the same 11 types as `config/types.json`, in a different order);
   - its own `SUBJECT_PATTERN` (the same shape as `HEADER_PATTERN`);
   - its own exempt prefixes (`Merge `, `Revert `, `fixup! `, `squash! `);
@@ -43,12 +43,14 @@ Severity: **High** = fix before the next release · **Medium** = real duplicatio
   `onboard.sh` also runs `node -p` three times just to read `package.json` (`:101-103`), and uses inline `node -e` for dependency checks (`:373, :383`).
 
 - **Suggestion:** port `onboard` to `lib/onboard.mjs` and reuse `github.mjs` and the sync output helpers, with the output helpers moved to a shared `lib/log.mjs`. This removes about 40 duplicated lines and the bash 3.2 constraints. It is the largest item here, so it can wait.
+- **Status:** done. `lib/onboard.sh` is now `lib/onboard.mjs`, called in-process by `bin/cli.mjs`. The output helpers and `confirm` are in `lib/log.mjs`, which `sync.mjs` uses too. Auth and repo detection use `github.requireAuth` / `github.detectRepo`, and the new `github.createBranchFromDefault` creates `dev`. `package.json` is read with `JSON.parse`. The onboard tests pass unchanged; only the `--help` marker in `test/cli.test.mjs` changed.
 
 ### 2.2 Changelog generation is written out twice
 
 - **Where:** `actions/auto-pr/release-pr.sh:38-42` and `actions/release/publish.sh:25-29`.
 - **What:** both write `echo '## Changes'` and then run `NO_COLOR=1 "$ci_root/node_modules/.bin/git-cliff" --config "$ci_root/config/cliff.toml" … --strip all`. Only the range arguments differ. `scripts/release-title.mjs:42-55` runs git-cliff a third time, with the same binary and config paths.
 - **Suggestion:** one `scripts/changelog.sh [git-cliff args…]`, or a `--changelog` mode in `release-title.mjs`, so the git-cliff path, config and heading live in one place.
+- **Status:** done. `scripts/changelog.mjs` holds the binary path, the config and the `## Changes` heading. `gitCliff()` is used by `release-title.mjs`; `node scripts/changelog.mjs <range args>` is used by `release-pr.sh` and `publish.sh`.
 
 ### 2.3 Work-type and title parsing is copied into the shell scripts
 
@@ -58,52 +60,48 @@ Severity: **High** = fix before the next release · **Medium** = real duplicatio
   - It matches a Conventional title with the hand-written regex `^$type(\([^)]+\))?!?: .`, which is a copy of `HEADER_PATTERN`.
   - `sync-metadata.sh:18` reads the label color from `types.json` with `jq` (a fourth reader).
 - **Suggestion:** a small `scripts/types.mjs` CLI (`is-type <t>`, `list`, `color <t>`, `first-title <type> <range>`) built on `commitlint.config.mjs`, so `HEADER_PATTERN` and `types` stay the only definitions.
+- **Status:** done. `scripts/types.mjs` (`branch-type`, `list`, `color`, `first-title`) is built on `commitlint.config.mjs`, which now exports `TYPES` and filters the `$` keys with `stripDocKeys`. `work-pr.sh` and `sync-metadata.sh` call it instead of `jq` and `grep`. `work-pr/rules.mjs` uses its `branchType()`. New `test/types.test.mjs`, including `work-pr.sh` end to end.
 
 ### 2.4 The release-title format is parsed again in `release.sh`
 
 - **Where:** `actions/release/release.sh:27` (`pattern='release v([0-9]+\.[0-9]+\.[0-9]+)$'`).
 - **What:** `scripts/release-title.mjs:38` builds `<type>[!]: release vX.Y.Z`, and `release.sh` parses the version back out of it with its own regex. If the format changes in one file, the other breaks without warning.
 - **Suggestion:** have `release-title.mjs` print the version as well (e.g. `--json` → `{title, version}`), or export the pattern from it.
+- **Status:** done. `release-title.mjs` exports `RELEASE_TITLE_PATTERN` / `releaseVersion()`. `release.sh` calls `release-title.mjs --version-of TITLE` for both the PR title (re-run) and the computed title.
 
 ### 2.5 The model and effort defaults are defined twice
 
 - **Where:** `config/actions.env:26-27` and `actions/auto-pr/describe.sh:24,27`.
 - **What:** `AUTO_DESCRIBE_MODEL=claude-sonnet-5-5` and `AUTO_DESCRIBE_EFFORT=low` appear in both. The header of `config/actions.env:15` says "Only values that differ from the code defaults live here", and these two do not differ. The reason given, "so it can be switched without a code change", does not hold either: `config/actions.env` ships in the same release as `describe.sh`.
 - **Suggestion:** keep them in `config/actions.env` only and make `describe.sh` fail or warn when they are unset. Or drop them from `actions.env` and fix its header.
+- **Status:** done, first option. `describe.sh` has no defaults: without `AUTO_DESCRIBE_MODEL` it warns and skips the description (a release PR keeps its changelog); without `AUTO_DESCRIBE_EFFORT` it passes no `--effort`. The `config/actions.env` header is fixed.
 
 ### 2.6 The `dev`/`main` fallbacks are repeated everywhere
 
 - **Where:** `${AUTO_BASE_BRANCH:-dev}` / `${AUTO_RELEASE_BRANCH:-main}` appear in `auto-pr/action.yml:58`, `describe.sh:18,21`, `release-pr.sh:22-23`, `sync-metadata.sh:16`, `work-pr.sh:15`, `release.sh:25`, `sync-dev.sh:20-21`, `verify-merge.sh:14-15`, and `prConfig` in `pr-checks/rules.mjs:15-16`.
 - **What:** every workflow already sets both variables in the job env, and the action headers say they are required.
 - **Suggestion:** set the defaults once, in `scripts/shared-vars.mjs`, which already runs first in auto-pr and pr-checks. Use `${VAR:?}` elsewhere so a missing value fails loudly. Low risk.
+- **Status:** done. `BRANCH_DEFAULTS` in `scripts/shared-vars.mjs` is applied after the repo and shared layers. The shell scripts use `${VAR:?}`, and `prConfig` throws when a branch is missing. The release action now runs `shared-vars.mjs` too, and auto-pr reads the PR kind in its own step, because `$GITHUB_ENV` only reaches later steps.
 
 ### 2.7 Setup steps repeated in the three composite actions
 
 - **Where:** `auto-pr/action.yml:64`, `pr-checks/action.yml:51`, `release/action.yml:53`; and `pr-checks/action.yml:60-62, 71-73, 85`.
 - **What:** `npm ci --ignore-scripts --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."` appears three times. `ci_root="$GITHUB_ACTION_PATH/../.."` is redefined in every step. The commitlint binary and `--config` path are written out twice in pr-checks.
 - **Suggestion:** set `CI_ROOT` once through `$GITHUB_ENV` in the install step. An `actions/_setup` composite action is optional. Low value, low risk.
+- **Status:** done, without `_setup`: a remote composite action cannot call a sibling action by relative path. Each action's first step exports `CI_ROOT` through `$GITHUB_ENV`, and the later steps use it. The commitlint binary and config are in `scripts/commitlint.sh`. The `npm ci` line stays, once per action.
 
-### 2.8 Two near-identical jobs in `self-pr-checks.yml`
-
-- **Where:** `.github/workflows/self-pr-checks.yml:53-92`.
-- **What:** `work-pr` and `release-pr` differ only in `if:`, `name:` and `kind:`.
-- **Suggestion:** use one job with a matrix (`kind: [work, release]`, `name: pr-check / ${{ matrix.label }}`, and an `if:` on the matrix value). Optional: two explicit jobs are easier to read.
-
-### 2.9 Self-* workflows and templates repeat the same jobs (accepted)
-
-- **What:** after 0.1, `self-auto-pr.yml`, `self-pr-checks.yml` and `self-release.yml` are near-copies of the templates. They have to be: this repo runs its actions by local path (`./actions/*`) at the pushed commit, and the templates use `__CI_REPO__/actions/*@__CI_REF__`. Their real differences: `self-pr-checks.yml` has the `Validate` job, `self-release.yml` has `major-tag` and `npm` instead of `deploy`, and only the templates have `workflow_dispatch`.
-- **Suggestion:** keep both, and add a test that renders each template with `__CI_REPO__/actions/<name>@__CI_REF__` → `./actions/<name>` and `__RUNS_ON__` → `ubuntu-latest`. Then compare the shared jobs with the self-* files, so the copies cannot drift apart.
-
-### 2.10 Copy-pasted test fixtures
+### 2.8 Copy-pasted test fixtures
 
 - **Where:** `test/pr-check.test.mjs`, `test/work-pr.test.mjs`, `test/release-pr.test.mjs`.
 - **What:** `failsWith()` is defined three times, and `const config = { ...prConfig({}), projectOwner: 'me' }` appears three times.
 - **Suggestion:** move both into `test/helpers.mjs`.
+- **Status:** done. `test/helpers.mjs` exports `PR_CONFIG` (frozen) and one `failsWith()`, which accepts either a rule's `{ fails }` or the `fails` array. The three test files import them.
 
-### 2.11 The `.gitignore` secrets block is written twice
+### 2.9 The `.gitignore` secrets block is written twice
 
-- **Where:** root `.gitignore:8-11` and the heredoc in `lib/onboard.sh:355-361`.
+- **Where:** root `.gitignore:8-11` and `GITIGNORE_BLOCK` in `lib/onboard.mjs`.
 - **What:** identical text. A cosmetic issue, but it could live as `templates/` data that both use.
+- **Status:** done. The lines are in `templates/secrets.gitignore`. `onboard` appends that file and leaves it out of the template list, so it is never rendered as its own file or offered to `--force`. Git has no include, so the root `.gitignore` keeps a copy, with a comment that names the source. A test in `test/onboard.test.mjs` fails if the copy drifts.
 
 ---
 
@@ -113,7 +111,7 @@ Severity: **High** = fix before the next release · **Medium** = real duplicatio
 | --- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | 3.1 | `bin/cli.mjs:91`                                                   | The `bootstrap` alias for `sync`. The comment says it is "still written in onboarded repos", but no template or script writes it anymore.                                                       | Remove it with v4, which is already a breaking release (`5bcd893 feat!`), and drop the test case at `test/cli.test.mjs:69`. |
 | 3.2 | `bin/cli.mjs:98`                                                   | The `path` command ("Print the package directory (to read config/)"). Only its own test uses it.                                                                                                | Remove it, unless you use it by hand.                                                                                       |
-| 3.3 | `lib/onboard.sh:289-292`                                           | The `OBSOLETE` removal of `promote-dev-to-main.yml`, a migration for 3.x repos.                                                                                                                 | Keep it for the v3→v4 migration, then remove it in v5.                                                                      |
+| 3.3 | `lib/onboard.mjs` `OBSOLETE`                                       | The `OBSOLETE` removal of `promote-dev-to-main.yml`, a migration for 3.x repos.                                                                                                                 | Keep it for the v3→v4 migration, then remove it in v5.                                                                      |
 | 3.4 | `actions/release/action.yml:42-44`                                 | The `version` output. Nothing reads it now; the old reusable `release.yml` passed it on.                                                                                                        | Keep it if `release.yml` is restored and exposes it (callers may want it); otherwise remove it.                             |
 | 3.5 | `actions/pr-checks/action.yml:38`, `actions/release/action.yml:32` | `github-token` inputs that no caller sets (they always default to `github.token`).                                                                                                              | Fine as part of the action's API; optional cleanup.                                                                         |
 | 3.6 | `lib/config.mjs:12`                                                | `PLACEHOLDER = /xxxx\|sk-ant-xxx\|github_pat_xxx/i`. The second and third alternatives add almost nothing over `xxxx`. `github_pat_` never appears in `secrets.env.example`, which uses `ghp_`. | Use `/xxxx/i`.                                                                                                              |
@@ -124,18 +122,8 @@ Severity: **High** = fix before the next release · **Medium** = real duplicatio
 
 ## 4. Stale or wrong documentation
 
-- `lib/onboard.sh:8`: "the two thin workflow callers". There are four workflow files, and after 0.1 they are no longer thin callers.
+- ~~`lib/onboard.sh:8`: "the two thin workflow callers".~~ Gone with the port (2.1).
 - `package.json:4,7`: the description ("reusable workflows …") and the `reusable-workflows` keyword. After 0.1 the package ships composite actions plus workflow templates.
 - `renovate.json:3`: this repo extends its own preset at `#v1`. `renovate/tooling.json:3` says to use `#v2`, the package is at 3.x, and the templates use `__CI_REF__`. Pick one ref, probably `#v4` after the next release.
 - ~~`eslint.config.mjs:1-3`: "generated by `ebalzan-ci onboard`". It was not (see 1.2).~~ Fixed.
-- `config/actions.env:15-20`: "Only values that differ from the code defaults live here". Not true (see 2.5).
-
----
-
-## Suggested order
-
-1. **0.1–0.3**: make the templates self-contained (calling `actions/*` directly) before v4 ships; otherwise v4 breaks every onboarded repo.
-2. **1.1, 1.2**: one commit rule across both packages; run ESLint or remove it.
-3. **2.2–2.6**: one source each for changelog, types, title format and defaults (small, low-risk refactors).
-4. **2.10, section 3, section 4**: quick cleanups.
-5. **2.1**: port `onboard.sh` to Node (largest change; do it last, or on its own).
+- ~~`config/actions.env:15-20`: "Only values that differ from the code defaults live here". Not true (see 2.5).~~ Fixed.

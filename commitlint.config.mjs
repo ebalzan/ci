@@ -10,10 +10,13 @@
 
 import { readFileSync } from 'node:fs'
 
-const commitTypes = JSON.parse(
-  readFileSync(new URL('./config/types.json', import.meta.url), 'utf8'),
+import { stripDocKeys } from './lib/config.mjs'
+
+// { <type>: { release, color } }, in config/types.json's order (precedence).
+export const TYPES = stripDocKeys(
+  JSON.parse(readFileSync(new URL('./config/types.json', import.meta.url), 'utf8')),
 )
-export const types = Object.keys(commitTypes).filter(key => !key.startsWith('$'))
+export const types = Object.keys(TYPES)
 
 // THE Conventional Commit header: commitlint parses with it, and the PR rules
 // (actions/pr-checks) and the release title (scripts/release-title.mjs) read the

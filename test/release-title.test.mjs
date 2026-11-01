@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { releaseTitle, unreleased } from '../scripts/release-title.mjs'
+import { changelog } from '../scripts/changelog.mjs'
+import { releaseTitle, releaseVersion, unreleased } from '../scripts/release-title.mjs'
 import { ROOT, gitRepo, isolatedEnv } from './helpers.mjs'
 
 const commit = (raw_message, breaking = false) => ({ raw_message, breaking })
@@ -22,6 +23,25 @@ test('the first type in config/types.json order wins', () => {
 test('a breaking commit adds the !', () => {
   const commits = [commit('refact: a\n\nBREAKING CHANGE: b', true)]
   assert.equal(releaseTitle({ version: 'v2.0.0', commits }), 'refact!: release v2.0.0')
+})
+
+test('releaseVersion reads back exactly what releaseTitle builds', () => {
+  for (const [version, breaking] of [
+    ['1.4.0', false],
+    ['v2.0.0', true],
+  ]) {
+    const title = releaseTitle({ version, commits: [commit('feat: a', breaking)] })
+    assert.equal(releaseVersion(title), version.replace(/^v/, ''))
+  }
+  for (const title of ['feat: release v1.4', 'feat: add release v1.4.0', 'release v1.4.0', '']) {
+    assert.equal(releaseVersion(title), '', title)
+  }
+  const cli = execFileSync(
+    process.execPath,
+    [join(ROOT, 'scripts', 'release-title.mjs'), '--version-of', 'fix!: release v3.0.0'],
+    { encoding: 'utf8' },
+  )
+  assert.equal(cli, '3.0.0\n')
 })
 
 test('nothing to release: no title', () => {
@@ -89,11 +109,17 @@ test('git-cliff: no tag yet starts at v0.1.0; a released HEAD has no title', t =
 
 test('git-cliff: the changelog groups by type, feat first', t => {
   const dir = history(t, ['tag v1.0.0', 'fix(api): b (#4)', 'feat: a', 'chore(release): 1.0.1'])
-  const changelog = execFileSync(
-    join(ROOT, 'node_modules', '.bin', 'git-cliff'),
-    ['--config', join(ROOT, 'config', 'cliff.toml'), '--unreleased', '--bump', '--strip', 'all'],
-    { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  const text = changelog(['--unreleased', '--bump'], { cwd: dir })
+  assert.match(
+    text,
+    /^## Changes\n\n### feat\n\n- a \([0-9a-f]{7}\)\n\n### fix\n\n- \*\*api:\*\* b \(#4\)/,
   )
-  assert.match(changelog, /### feat\n\n- a \([0-9a-f]{7}\)\n\n### fix\n\n- \*\*api:\*\* b \(#4\)/)
-  assert.doesNotMatch(changelog, /chore|<!--/)
+  assert.doesNotMatch(text, /chore|<!--/)
+
+  const cli = execFileSync(
+    process.execPath,
+    [join(ROOT, 'scripts', 'changelog.mjs'), '--unreleased', '--bump'],
+    { cwd: dir, encoding: 'utf8' },
+  )
+  assert.equal(cli, text)
 })

@@ -17,8 +17,8 @@
 # runner's GITHUB_SERVER_URL and GITHUB_REPOSITORY.
 set -euo pipefail
 
-dev="${AUTO_BASE_BRANCH:-dev}"
-main="${AUTO_RELEASE_BRANCH:-main}"
+dev="${AUTO_BASE_BRANCH:?}"
+main="${AUTO_RELEASE_BRANCH:?}"
 
 # push SHA — SHA to dev, refused unless it is a fast-forward.
 push() {

@@ -2,8 +2,8 @@
 //
 // ebalzan-ci — the command-line entry point of @ebalzan/ci.
 //
-// sync is lib/sync.mjs; onboard is the bash tool lib/onboard.sh, run with the
-// arguments unchanged. `ebalzan-ci <cmd> --help` prints the command's own help.
+// sync is lib/sync.mjs, onboard lib/onboard.mjs. `ebalzan-ci <cmd> --help`
+// prints the command's own help.
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+import { onboard } from '../lib/onboard.mjs'
 import { sync } from '../lib/sync.mjs'
 
 const BIN_DIR = dirname(fileURLToPath(import.meta.url))
@@ -72,18 +73,6 @@ function commitlintCli() {
   return join(dirname(require.resolve('@commitlint/cli/package.json')), 'cli.js')
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit' })
-  if (result.error) {
-    console.error(`ebalzan-ci: could not run ${command}: ${result.error.message}`)
-    if (command === 'bash' || command === 'sh') {
-      console.error('The tools need a POSIX shell (Linux, macOS, WSL or Git Bash on Windows).')
-    }
-    return 127
-  }
-  return result.status ?? 1
-}
-
 async function main(argv) {
   const [command, ...args] = argv
   switch (command) {
@@ -91,7 +80,7 @@ async function main(argv) {
     case 'bootstrap': // the 3.x name, still written in onboarded repos
       return sync(args)
     case 'onboard':
-      return run('bash', [join(ROOT, 'lib', 'onboard.sh'), ...args])
+      return onboard(args)
     case 'commit-msg':
       return commitMsg(args)
     case 'path':

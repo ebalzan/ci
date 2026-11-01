@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { parseEnvFile } from '../lib/config.mjs'
-import { applySharedVars } from '../scripts/shared-vars.mjs'
+import { applySharedVars, BRANCH_DEFAULTS } from '../scripts/shared-vars.mjs'
 import { ROOT, tempDir, writeFile } from './helpers.mjs'
 
 const quiet = { info() {}, warning() {} }
@@ -34,6 +34,19 @@ test('job env beats repo variables beats config/actions.env', t => {
   assert.equal(env.AUTO_C, 'shared')
   assert.equal(env.OTHER, undefined, 'only AUTO_* repo variables are taken')
   assert.equal(env.AUTO_E, undefined, 'a blank repo variable means unset')
+})
+
+test('the branch defaults fill only what no layer sets', t => {
+  const file = join(tempDir(t), 'missing.env')
+  const defaults = {}
+  applySharedVars({ core: quiet, env: defaults, file })
+  assert.equal(defaults.AUTO_BASE_BRANCH, BRANCH_DEFAULTS.AUTO_BASE_BRANCH)
+  assert.equal(defaults.AUTO_RELEASE_BRANCH, BRANCH_DEFAULTS.AUTO_RELEASE_BRANCH)
+
+  const env = { AUTO_BASE_BRANCH: 'develop', REPO_VARS_JSON: '{"AUTO_RELEASE_BRANCH":"prod"}' }
+  applySharedVars({ core: quiet, env, file })
+  assert.equal(env.AUTO_BASE_BRANCH, 'develop')
+  assert.equal(env.AUTO_RELEASE_BRANCH, 'prod')
 })
 
 test('run as a script, it appends what it set to $GITHUB_ENV', t => {

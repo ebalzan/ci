@@ -7,7 +7,8 @@
 # newest vX.Y.Z tag in the repo, reachable or not, so it would find nothing to
 # release here.) Otherwise recomputes the release title on main
 # (scripts/release-title.mjs, git-cliff): it must equal the merged PR's title,
-# which the PR check held to the same computation on dev. vX.Y.Z comes from it.
+# which the PR check held to the same computation on dev. vX.Y.Z comes from it
+# (release-title.mjs --version-of, which also reads the PR title for a re-run).
 # With a package.json, a `chore(release): X.Y.Z` commit bumps it (and the
 # lockfile) and the tag goes on that commit; without one, on the merge commit.
 # Main and the tag are pushed in one atomic push, a fast-forward: when main
@@ -22,12 +23,12 @@
 set -euo pipefail
 
 ci_root="$(dirname "${BASH_SOURCE[0]}")/../.."
-main="${AUTO_RELEASE_BRANCH:-main}"
+main="${AUTO_RELEASE_BRANCH:?}"
+# version_of TITLE — the X.Y.Z a release title names, or nothing.
+version_of() { node "$ci_root/scripts/release-title.mjs" --version-of "$1"; }
 
-pattern='release v([0-9]+\.[0-9]+\.[0-9]+)$'
-
-if [[ "$PR_TITLE" =~ $pattern ]] && git rev-parse -q --verify "refs/tags/v${BASH_REMATCH[1]}" >/dev/null; then
-  version="${BASH_REMATCH[1]}"
+version="$(version_of "$PR_TITLE")"
+if [ -n "$version" ] && git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
   tag="v$version"
   sha="$(git rev-parse "$tag^{commit}")"
   if ! git merge-base --is-ancestor "$MERGE_SHA" "$sha"; then
@@ -48,8 +49,7 @@ if [ "$title" != "$PR_TITLE" ]; then
   echo "::error::The release PR is titled '$PR_TITLE', but '$main' computes '$title'. Nothing was released."
   exit 1
 fi
-[[ "$title" =~ $pattern ]]
-version="${BASH_REMATCH[1]}"
+version="$(version_of "$title")"
 tag="v$version"
 { echo "tag=$tag"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
 

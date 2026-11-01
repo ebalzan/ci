@@ -5,7 +5,7 @@
 # Creates the GitHub Release of TAG, or updates it on a re-run. Its notes are
 # the release PR's description — the AI summary above the git-cliff changelog,
 # as actions/auto-pr wrote it — else git-cliff's changelog since the previous
-# vX.Y.Z.
+# vX.Y.Z (scripts/changelog.mjs).
 #
 # Env: GH_TOKEN, GH_REPO, PR_BODY, TAG, plus the runner's RUNNER_TEMP. Needs the
 # root package installed (git-cliff).
@@ -22,11 +22,7 @@ else
   if previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' "$TAG^" 2>/dev/null)"; then
     range="$previous..$TAG"
   fi
-  {
-    echo '## Changes'
-    NO_COLOR=1 "$ci_root/node_modules/.bin/git-cliff" --config "$ci_root/config/cliff.toml" \
-      --strip all "$range"
-  } > "$notes"
+  node "$ci_root/scripts/changelog.mjs" "$range" > "$notes"
 fi
 
 if gh release view "$TAG" >/dev/null 2>&1; then

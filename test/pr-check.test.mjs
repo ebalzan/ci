@@ -5,31 +5,26 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { checkTracking, prConfig } from '../actions/pr-checks/rules.mjs'
-
-const config = { ...prConfig({}), projectOwner: 'me' }
+import { BRANCH_DEFAULTS } from '../scripts/shared-vars.mjs'
+import { PR_CONFIG, failsWith } from './helpers.mjs'
 
 // A PR that passes every rule; each test changes one thing.
 function check({ pr = {}, ...rest } = {}) {
   return checkTracking({
     pr: { body: '## Summary\nFilters.', assignees: ['me'], milestone: null, ...pr },
-    config,
+    config: PR_CONFIG,
     ...rest,
   })
-}
-
-function failsWith(fails, pattern) {
-  assert.ok(
-    fails.some(message => pattern.test(message)),
-    `expected a fail matching ${pattern}, got: ${JSON.stringify(fails)}`,
-  )
 }
 
 test('a tracked PR passes', () => {
   assert.deepEqual(check(), [])
 })
 
-test('prConfig reads the AUTO_* knobs, with defaults', () => {
-  assert.deepEqual(prConfig({}), {
+test('prConfig reads the AUTO_* knobs, with defaults; the branches are required', () => {
+  assert.throws(() => prConfig({}), /AUTO_BASE_BRANCH is not set/)
+  assert.throws(() => prConfig({ AUTO_BASE_BRANCH: 'dev' }), /AUTO_RELEASE_BRANCH is not set/)
+  assert.deepEqual(prConfig(BRANCH_DEFAULTS), {
     baseBranch: 'dev',
     releaseBranch: 'main',
     milestoneTitle: '',
@@ -58,14 +53,15 @@ test('needs an assignee', () => {
 })
 
 test('milestone is required only when AUTO_MILESTONE_TITLE is set', () => {
-  const run = milestone => check({ pr: { milestone }, config: { ...config, milestoneTitle: 'Q4' } })
+  const run = milestone =>
+    check({ pr: { milestone }, config: { ...PR_CONFIG, milestoneTitle: 'Q4' } })
   failsWith(run(null), /Set the milestone to `Q4`/)
   failsWith(run('Q3'), /Set the milestone to `Q4` \(AUTO_MILESTONE_TITLE\), not `Q3`/)
   assert.deepEqual(run('q4'), [])
 })
 
 test('board is required only when AUTO_PROJECT_NUMBER is set', () => {
-  const run = extra => check({ config: { ...config, projectNumber: 15 }, ...extra })
+  const run = extra => check({ config: { ...PR_CONFIG, projectNumber: 15 }, ...extra })
   failsWith(run({ projects: [] }), /Add the PR to project #15 of `me`/)
   failsWith(run({ projects: [{ owner: 'other', number: 15 }] }), /Add the PR to project #15/)
   failsWith(run({ projectsError: 'Resource not accessible' }), /Could not check .*not accessible/)

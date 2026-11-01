@@ -11,8 +11,8 @@
 # Env: HEAD_SHA (the PR's head), MERGE_SHA (the PR's merge_commit_sha).
 set -euo pipefail
 
-dev="${AUTO_BASE_BRANCH:-dev}"
-main="${AUTO_RELEASE_BRANCH:-main}"
+dev="${AUTO_BASE_BRANCH:?}"
+main="${AUTO_RELEASE_BRANCH:?}"
 read -r -a commit <<< "$(git rev-list --parents -n 1 "$MERGE_SHA")"
 
 if [ "${#commit[@]}" -ne 3 ] || [ "${commit[2]}" != "$HEAD_SHA" ]; then

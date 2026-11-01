@@ -2,6 +2,7 @@
 // squash-merged — on top of what every PR needs (../rules.mjs).
 
 import { types } from '../../../commitlint.config.mjs'
+import { branchType as typeOf } from '../../../scripts/types.mjs'
 import { TITLE_PATTERN, checkTracking, code } from '../rules.mjs'
 
 const BREAKING_FOOTER = /^BREAKING[ -]CHANGE:/m
@@ -34,8 +35,8 @@ export function checkWorkPr({
     )
   }
 
-  const [branchType, ...rest] = pr.head.split('/')
-  const branchOk = types.includes(branchType) && rest.join('/') !== ''
+  const branchType = typeOf(pr.head)
+  const branchOk = branchType !== ''
   if (!branchOk) {
     fails.push(
       `Branch ${code(pr.head)} is not ${code('<type>/<description>')} with a type of ` +
