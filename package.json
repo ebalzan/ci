@@ -34,13 +34,13 @@
   },
   "files": [
     "bin/",
+    "lib/",
     "templates/",
     "renovate/",
     "docs/",
     "commitlint.config.mjs",
     "config/actions.env",
     "config/types.json",
-    "config/repos.env",
     "config/repo-settings.json",
     "config/rulesets/",
     "config/secrets.env.example"
@@ -52,10 +52,9 @@
     "access": "public"
   },
   "scripts": {
-    "check": "for f in bin/*.sh actions/*/*.sh; do bash -n \"$f\" || exit 1; done && for f in bin/*.mjs scripts/*.mjs actions/*/*.mjs actions/*/*/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "for f in lib/*.sh actions/*/*.sh; do bash -n \"$f\" || exit 1; done && for f in bin/*.mjs lib/*.mjs scripts/*.mjs actions/*/*.mjs actions/*/*/*.mjs commitlint.config.mjs; do node --check \"$f\" || exit 1; done",
     "test": "node --test 'test/*.test.mjs'",
-    "gh:bootstrap": "bash bin/gh-bootstrap.sh",
-    "gh:reset": "bash bin/gh-reset.sh",
+    "gh:sync": "node bin/cli.mjs sync",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

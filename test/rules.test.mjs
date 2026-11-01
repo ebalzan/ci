@@ -1,13 +1,13 @@
 // THE list of work types (config/types.json) must be well-formed and is
 // what every reader sees. Plus the shipped JSON rules must be valid for the
-// GitHub API shapes the bootstrap sends.
+// GitHub API shapes `sync` sends.
 
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { deepMerge, diffTopLevel, stripDocKeys } from '../bin/_json.mjs'
+import { deepMerge, diffTopLevel, stripDocKeys } from '../lib/config.mjs'
 import commitlintConfig, { types } from '../commitlint.config.mjs'
 import { ROOT } from './helpers.mjs'
 

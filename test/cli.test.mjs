@@ -15,7 +15,7 @@ test('version matches package.json', () => {
 test('help lists every command; no command is an error', () => {
   const help = runCli(['help'])
   assert.equal(help.status, 0)
-  for (const command of ['onboard', 'bootstrap', 'reset', 'commit-msg', 'path']) {
+  for (const command of ['sync', 'onboard', 'commit-msg', 'path']) {
     assert.match(help.stdout, new RegExp(`\\b${command}\\b`))
   }
   assert.equal(runCli([]).status, 1)
@@ -63,10 +63,10 @@ test('commit-msg lets git-generated subjects through', () => {
   }
 })
 
-test('script commands forward --help to the bash tool', () => {
+test('commands print their own --help', () => {
   for (const [command, marker] of [
-    ['bootstrap', /gh-bootstrap\.sh — apply the shared rules/],
-    ['reset', /gh-reset\.sh — delete GitHub Actions variables/],
+    ['sync', /Usage: ebalzan-ci sync/],
+    ['bootstrap', /Usage: ebalzan-ci sync/],
     ['onboard', /onboard\.sh — bring a repo under the shared rules/],
   ]) {
     const result = runCli([command, '--help'])
