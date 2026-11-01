@@ -7,8 +7,10 @@
 #      branch when dev does not exist yet;
 #   2. writes the templates/ files: the two thin workflow callers, a starter
 #      .github/actions.env, renovate.json and, for a Node repo, the husky
-#      commit-msg hook. A file that already exists is kept (--force replaces it);
-#      a caller an older version wrote and this one replaced is removed;
+#      commit-msg hook. A file that already exists is kept (--force replaces
+#      it), except .github/workflows/deploy.yml, which is the repo's own and is
+#      never replaced; a caller an older version wrote and this one replaced is
+#      removed;
 #   3. adds the .github/secrets*.env files to .gitignore when they are not
 #      ignored yet (before any secret file exists);
 #   4. for a Node repo (package.json): installs this package and husky as
@@ -33,7 +35,10 @@
 #       --runs-on LABEL    Runner label for every job (default: ubuntu-latest)
 #       --ref REF          Ref the callers pin (default: v<major of this package>)
 #       --branch NAME      Branch to commit on (default: ci/onboard-ebalzan-ci)
-#       --force            Overwrite files that already exist
+#       --force [FILE]     Overwrite FILE (a template path, e.g.
+#                          .github/workflows/pr-checks.yml) when it exists;
+#                          repeat for more. Without FILE: every template file.
+#                          .github/workflows/deploy.yml is never overwritten.
 #       --no-npm           Skip the npm installs even when package.json exists
 #       --no-config        Do not wire @ebalzan/config (Prettier, ESLint)
 #       --no-push          Stop after the local commit (no GitHub changes at all)
@@ -102,7 +107,10 @@ REPO=""
 RUNS_ON="ubuntu-latest"
 REF="v${CI_VERSION%%.*}"
 BRANCH="ci/onboard-ebalzan-ci"
-FORCE=false
+FORCE_ALL=false
+FORCE_FILES=()
+# Templates the repo owns once written: never overwritten, even with --force.
+NEVER_OVERWRITE=(.github/workflows/deploy.yml)
 NPM=true
 CONFIG=true
 CONFIG_PACKAGE="@ebalzan/config"
@@ -116,7 +124,11 @@ while [[ $# -gt 0 ]]; do
     --runs-on)     RUNS_ON="${2:-}"; shift 2 ;;
     --ref)         REF="${2:-}"; shift 2 ;;
     --branch)      BRANCH="${2:-}"; shift 2 ;;
-    --force)       FORCE=true; shift ;;
+    --force)
+      # A following non-option argument is the file to force; else force all.
+      if [[ -n "${2:-}" && "$2" != -* ]]; then FORCE_FILES+=("${2#./}"); shift 2
+      else FORCE_ALL=true; shift
+      fi ;;
     --no-npm)      NPM=false; shift ;;
     --no-config)   CONFIG=false; shift ;;
     --no-push)     PUSH=false; shift ;;
@@ -180,6 +192,30 @@ ESLINT_FILES=(eslint.config.js eslint.config.cjs eslint.config.mjs eslint.config
   eslint.config.cts .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.json .eslintrc.yaml .eslintrc.yml)
 
 # ---- plan --------------------------------------------------------------------
+# in_list ITEM LIST... — whether ITEM is one of LIST.
+in_list() {
+  local item="$1" x; shift
+  for x in "$@"; do [[ "$x" == "$item" ]] && return 0; done
+  return 1
+}
+never_overwrite() { in_list "$1" "${NEVER_OVERWRITE[@]}"; }
+# forced REL — whether --force covers template REL.
+forced() {
+  never_overwrite "$1" && return 1
+  $FORCE_ALL || { [[ ${#FORCE_FILES[@]} -gt 0 ]] && in_list "$1" "${FORCE_FILES[@]}"; }
+}
+
+TEMPLATE_FILES=()
+while IFS= read -r rel; do TEMPLATE_FILES+=("$rel"); done \
+  < <(cd "$TEMPLATES_DIR" && find . -type f | sed 's#^\./##' | sort)
+for rel in ${FORCE_FILES[@]+"${FORCE_FILES[@]}"}; do
+  if never_overwrite "$rel"; then
+    die "--force $rel: it is the repo's own file and is never overwritten. Delete it to get the template again."
+  fi
+  in_list "$rel" "${TEMPLATE_FILES[@]}" \
+    || die "--force $rel: not a template file. One of: ${TEMPLATE_FILES[*]}"
+done
+
 # applies REL — whether template REL belongs in this repo at all; when it does
 # not, SKIP_REASON says why.
 SKIP_REASON=""
@@ -196,7 +232,7 @@ applies() {
     renovate.json)
       # Any existing Renovate config is the repo's own; extend the preset there.
       for f in renovate.json renovate.json5 .renovaterc .renovaterc.json .github/renovate.json .github/renovate.json5; do
-        if [[ -e "$REPO_DIR/$f" ]] && ! $FORCE; then SKIP_REASON="repo has its own Renovate config"; return 1; fi
+        if [[ -e "$REPO_DIR/$f" ]] && ! forced renovate.json; then SKIP_REASON="repo has its own Renovate config"; return 1; fi
       done ;;
   esac
   return 0
@@ -229,10 +265,13 @@ PLAN=()   # "action<TAB>rel" with action = create | overwrite | keep | skip
 while IFS= read -r rel; do
   if ! applies "$rel"; then PLAN+=("skip	$rel	$SKIP_REASON")
   elif [[ -e "$REPO_DIR/$rel" ]]; then
-    if $FORCE; then PLAN+=("overwrite	$rel"); else PLAN+=("keep	$rel"); fi
+    if forced "$rel"; then PLAN+=("overwrite	$rel")
+    elif never_overwrite "$rel"; then PLAN+=("keep	$rel	the repo's own — never overwritten")
+    else PLAN+=("keep	$rel	exists — --force $rel replaces it")
+    fi
   else PLAN+=("create	$rel")
   fi
-done < <(cd "$TEMPLATES_DIR" && find . -type f | sed 's#^\./##' | sort)
+done < <(printf '%s\n' "${TEMPLATE_FILES[@]}")
 
 # Callers an older version wrote that this one replaced: left in place, they
 # would fight the new ones over the same PR.
@@ -250,7 +289,7 @@ for entry in "${PLAN[@]}"; do
   case "$action" in
     create|overwrite) printf '    %-10s %s\n' "$action" "$rel" ;;
     remove)           printf '    %-10s %s (%s)\n' remove "$rel" "$reason" ;;
-    keep)             printf '    %s%-10s %s (exists — --force replaces it)%s\n' "$DIM" keep "$rel" "$RESET" ;;
+    keep)             printf '    %s%-10s %s (%s)%s\n' "$DIM" keep "$rel" "$reason" "$RESET" ;;
     skip)             printf '    %s%-10s %s (%s)%s\n' "$DIM" skip "$rel" "$reason" "$RESET" ;;
   esac
 done
@@ -340,7 +379,7 @@ fi
 
 git_ add -A
 if git_ diff --cached --quiet; then
-  warn "Nothing to commit — every file already exists. Use --force to replace them."
+  warn "Nothing to commit — every file already exists. Use --force FILE to replace one."
   git_ switch --quiet -
   git_ branch --quiet -D "$BRANCH"
   exit 0

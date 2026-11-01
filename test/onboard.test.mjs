@@ -76,6 +76,7 @@ test('existing files are kept unless --force', t => {
   })
   const result = runCli(['onboard', '-C', dir, '--no-push'], { env })
   assert.equal(result.status, 0, result.stderr + result.stdout)
+  assert.match(result.stdout, /keep +\.github\/workflows\/pr-checks\.yml \(exists — --force/)
   assert.equal(readFileSync(join(dir, '.github', 'workflows', 'pr-checks.yml'), 'utf8'), mine)
   assert.ok(!existsSync(join(dir, 'renovate.json')), 'own Renovate config is respected')
 
@@ -84,6 +85,47 @@ test('existing files are kept unless --force', t => {
   const forced = runCli(['onboard', '-C', dir, '--no-push', '--force'], { env })
   assert.equal(forced.status, 0, forced.stderr + forced.stdout)
   assert.notEqual(readFileSync(join(dir, '.github', 'workflows', 'pr-checks.yml'), 'utf8'), mine)
+})
+
+test('--force FILE overwrites only that file', t => {
+  const env = isolatedEnv(t)
+  const mine = 'name: mine\n'
+  const { dir } = gitRepo(t, env, {
+    '.github/workflows/pr-checks.yml': mine,
+    '.github/workflows/auto-pr.yml': mine,
+  })
+  const args = ['onboard', '-C', dir, '--no-push', '--force', '.github/workflows/pr-checks.yml']
+  const result = runCli(args, { env })
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+  assert.match(result.stdout, /overwrite +\.github\/workflows\/pr-checks\.yml/)
+  assert.notEqual(readFileSync(join(dir, '.github', 'workflows', 'pr-checks.yml'), 'utf8'), mine)
+  assert.equal(readFileSync(join(dir, '.github', 'workflows', 'auto-pr.yml'), 'utf8'), mine)
+})
+
+test('--force FILE must name a template file', t => {
+  const env = isolatedEnv(t)
+  const { dir } = gitRepo(t, env, {})
+  const result = runCli(['onboard', '-C', dir, '--no-push', '--force', 'nope.yml'], { env })
+  assert.equal(result.status, 1)
+  assert.match(result.stderr + result.stdout, /--force nope\.yml: not a template file/)
+})
+
+test('deploy.yml is never overwritten, not even with --force', t => {
+  const env = isolatedEnv(t)
+  const deploy = '.github/workflows/deploy.yml'
+  const mine = 'name: Deploy\n# my own steps\n'
+  const { dir, git } = gitRepo(t, env, { [deploy]: mine })
+  const result = runCli(['onboard', '-C', dir, '--no-push', '--force'], { env })
+  assert.equal(result.status, 0, result.stderr + result.stdout)
+  assert.match(result.stdout, /keep +\.github\/workflows\/deploy\.yml \(the repo's own/)
+  assert.equal(readFileSync(join(dir, deploy), 'utf8'), mine)
+
+  git('switch', '--quiet', 'main')
+  git('branch', '-D', 'ci/onboard-ebalzan-ci')
+  const named = runCli(['onboard', '-C', dir, '--no-push', '--force', deploy], { env })
+  assert.equal(named.status, 1)
+  assert.match(named.stderr + named.stdout, /never overwritten/)
+  assert.equal(readFileSync(join(dir, deploy), 'utf8'), mine)
 })
 
 test('a caller this version replaced is removed', t => {
