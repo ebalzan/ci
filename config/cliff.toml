@@ -26,7 +26,7 @@ conventional_commits = true
 # them the release PR's merge commit (`Merge pull request #N from …`).
 filter_unconventional = true
 protect_breaking_commits = true
-# Only vX.Y.Z: the moving major tags (v4) would otherwise end the range.
+# Only vX.Y.Z: the moving major tags (v1) would otherwise end the range.
 tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 commit_parsers = [
   { message = "^chore\\(release\\):", skip = true },

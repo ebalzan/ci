@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Shared Renovate preset: keeps the lint, format, git-hook and compiler tooling on the same versions in every repo that extends it as github>ebalzan/ci//renovate/tooling#v2. Only the packages listed below are managed; every other dependency is left alone.",
+  "description": "Shared Renovate preset: keeps the lint, format, git-hook and compiler tooling on the same versions in every repo that extends it as github>ebalzan/ci//renovate/tooling#v1. Only the packages listed below are managed; every other dependency is left alone.",
   "extends": ["config:recommended"],
   "baseBranchPatterns": ["dev"],
   "branchPrefix": "chore/renovate-",
