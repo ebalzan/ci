@@ -22,8 +22,8 @@ trim = true
 
 [git]
 conventional_commits = true
-# Merge commits and git's own subjects (Revert "…") are not releases — among
-# them the release PR's merge commit (`Merge pull request #N from …`).
+# Merge commits and git's own subjects (Revert "…") are not releases. History
+# is linear (main fast-forwards to dev), but a merge that slipped in is skipped.
 filter_unconventional = true
 protect_breaking_commits = true
 # Only vX.Y.Z: the moving major tags (v1) would otherwise end the range.

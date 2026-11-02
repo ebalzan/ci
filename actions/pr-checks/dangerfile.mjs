@@ -1,5 +1,5 @@
 // Danger entry point of the PR check: action.yml runs `danger ci --dangerfile`
-// on this file. Danger puts its DSL (danger, fail, warn) on the global scope
+// on this file. Danger puts its DSL (danger, fail, warn, message) on the global scope
 // and awaits the default export. This file only gathers the PR's data; the
 // rules of the PR's kind (PR_KIND) decide: work-pr/rules.mjs or
 // release-pr/rules.mjs.
@@ -63,7 +63,11 @@ export default async function () {
   }
 
   const check = process.env.PR_KIND === 'release' ? checkReleasePr : checkWorkPr
-  const { fails, warnings } = check({
+  const {
+    fails,
+    warnings,
+    messages = [],
+  } = check({
     pr: {
       title: pr.title,
       body: pr.body ?? '',
@@ -80,9 +84,11 @@ export default async function () {
     projects,
     projectsError,
     behindBy: Number.parseInt(process.env.BEHIND_BY ?? '', 10) || 0,
+    mergeCommits: Number.parseInt(process.env.MERGE_COMMITS ?? '', 10) || 0,
     config,
   })
 
   for (const message of fails) fail(message)
   for (const message of warnings) warn(message)
+  for (const text of messages) message(text)
 }

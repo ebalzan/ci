@@ -4,7 +4,9 @@
 #
 # Puts on the PR: its label (created when missing — a type label with its color
 # from config/types.json via scripts/types.mjs, or `release` on the release PR), the pusher as
-# assignee, AUTO_MILESTONE_TITLE and the AUTO_PROJECT_NUMBER board. Each is
+# assignee, AUTO_MILESTONE_TITLE and the AUTO_PROJECT_NUMBER board. On the
+# release PR it also creates the `ship` label, which releases it
+# (templates/.github/workflows/release.yml), but never adds it. Each is
 # best-effort: a failure is a warning, and the PR check then names what is
 # missing.
 #
@@ -20,6 +22,10 @@ else
 fi
 # Fails when the label exists — left as it is.
 gh label create "$PR_LABEL" --color "$color" --description "$description" >/dev/null 2>&1
+if [ "$PR_LABEL" = release ]; then
+  gh label create ship --color 5319E7 \
+    --description "Releases the release PR: fast-forwards $AUTO_RELEASE_BRANCH to $AUTO_BASE_BRANCH" >/dev/null 2>&1
+fi
 
 # REST, not `gh pr edit`: that one reads the PR's team review requests over
 # GraphQL first, which a classic PAT without `read:org` cannot.

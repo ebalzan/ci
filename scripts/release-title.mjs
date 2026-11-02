@@ -1,10 +1,10 @@
 // The release PR's title: `<type>[!]: release vX.Y.Z`, from the commits on dev
 // that are not released yet. It names the release: the first type present in
 // config/types.json's order (the minor types lead), `!` when a commit is
-// breaking. The version is git-cliff's (config/cliff.toml). Merged with a merge
-// commit, the release PR brings the same commits to main, where actions/release
-// recomputes the title and requires it to equal the PR's. The format is built
-// and read back only here.
+// breaking. The version is git-cliff's (config/cliff.toml). The release PR
+// ships by fast-forwarding main to dev, the same commits; actions/release
+// recomputes the title on the PR's head and requires it to equal the PR's. The
+// format is built and read back only here.
 //
 // Two ways in:
 //   import { releaseTitle } from './release-title.mjs'   (tests)

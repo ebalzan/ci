@@ -1,6 +1,6 @@
 # The PR check: what a PR must look like before it is merged, for both kinds
 # actions/auto-pr opens — a work PR (feat/fix/… → dev, squash-merged) and the
-# release PR (dev → main, merged with a merge commit). Three steps, each
+# release PR (dev → main, shipped by fast-forward). Three steps, each
 # reported on its own in the job log; all three run even when one fails, so one
 # push shows everything to fix:
 #
@@ -9,8 +9,8 @@
 #   Conventional commits  commitlint on every commit of the PR — a work PR's
 #                         squash commit lists them in its body (repo setting
 #                         squash_merge_commit_message = COMMIT_MESSAGES); the
-#                         release PR's are dev's commits, which reach main as
-#                         they are.
+#                         release PR's are dev's commits, which main
+#                         fast-forwards to as they are.
 #   PR metadata           Danger (dangerfile.mjs → work-pr/rules.mjs or
 #                         release-pr/rules.mjs, both on rules.mjs). Work PR: base
 #                         branch, branch name, title type = branch type, type
@@ -19,9 +19,10 @@
 #                         base. Release PR: base branch, the exact title
 #                         scripts/release-title.mjs computes (git-cliff), the
 #                         `release` label, assignee, milestone, board,
-#                         description, dev not behind main; a warning for a major
-#                         release. Posts one PR comment listing them, removed once
-#                         all pass.
+#                         description, dev not behind main and without merge
+#                         commits; a warning for a major release, and once it
+#                         passes, how to ship it (the `ship` label). Posts one PR
+#                         comment listing them.
 #
 # Renovate's PRs (chore/renovate-*) get the two commitlint steps only: Renovate
 # opens and rewrites them itself, with no board, milestone or AI description.
@@ -80,7 +81,8 @@ runs:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
       run: |
         BEHIND_BY="$(git rev-list --count "$HEAD_SHA..origin/$BASE_REF" 2>/dev/null || echo 0)"
-        export BEHIND_BY
+        MERGE_COMMITS="$(git rev-list --merges --count "origin/$BASE_REF..$HEAD_SHA" 2>/dev/null || echo 0)"
+        export BEHIND_BY MERGE_COMMITS
         if [ "$PR_KIND" = release ]; then
           RELEASE_TITLE="$(node "$CI_ROOT/scripts/release-title.mjs")"
           export RELEASE_TITLE

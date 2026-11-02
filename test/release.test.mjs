@@ -1,7 +1,7 @@
 // actions/release's scripts end to end, on throwaway repos: a bare "origin", a
-// working copy that plays the developer (dev, the release PR's merge), and a
-// fresh clone at the merge commit that plays the runner. gh is a stub that logs
-// its arguments.
+// working copy that plays the developer (main, dev and the release PR's head),
+// and a fresh clone at the PR's head that plays the runner. gh is a stub that
+// logs its arguments.
 
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -13,9 +13,10 @@ import { ROOT, gitRepo, isolatedEnv, tempDir, writeFile } from './helpers.mjs'
 
 const SCRIPTS = join(ROOT, 'actions', 'release')
 
-// main tagged v1.3.0, dev two commits ahead, the release PR merged with a merge
-// commit and pushed. Returns the developer's git, origin, and the PR's SHAs.
-function released(t, { files = {}, title = 'feat: release v1.4.0' } = {}) {
+// main tagged v1.3.0 and dev two commits ahead, both pushed: the release PR as
+// it waits for its `ship` label. Returns the developer's git, origin, and the
+// PR's head.
+function releasePr(t, { files = {}, title = 'feat: release v1.4.0' } = {}) {
   const env = isolatedEnv(t)
   const origin = tempDir(t)
   execFileSync('git', ['init', '--quiet', '--bare', '--initial-branch=main', origin], { env })
@@ -30,19 +31,15 @@ function released(t, { files = {}, title = 'feat: release v1.4.0' } = {}) {
   git('commit', '--quiet', '--allow-empty', '-m', 'fix: c2')
   git('push', '--quiet', 'origin', 'dev')
   const head = git('rev-parse', 'HEAD').trim()
-  git('switch', '--quiet', 'main')
-  git('merge', '--quiet', '--no-ff', 'dev', '-m', 'Merge pull request #1 from o/dev', '-m', title)
-  git('push', '--quiet', 'origin', 'main')
-  const merge = git('rev-parse', 'HEAD').trim()
-  return { env, origin, dir, git, head, merge, title }
+  return { env, origin, dir, git, head, title }
 }
 
 // Runs one script the way the action does: in a fresh clone checked out at the
-// merge commit. Returns its status, output, GITHUB_OUTPUT and the clone.
+// PR's head. Returns its status, output, GITHUB_OUTPUT and the clone.
 function run(t, ctx, script, extraEnv = {}) {
   const clone = tempDir(t)
   execFileSync('git', ['clone', '--quiet', ctx.origin, clone], { env: ctx.env })
-  execFileSync('git', ['checkout', '--quiet', '--detach', ctx.merge], { cwd: clone, env: ctx.env })
+  execFileSync('git', ['checkout', '--quiet', '--detach', ctx.head], { cwd: clone, env: ctx.env })
   return runIn(t, ctx, clone, script, extraEnv)
 }
 
@@ -60,7 +57,7 @@ function runIn(t, ctx, clone, script, extraEnv = {}) {
       GITHUB_OUTPUT: outputFile,
       RUNNER_TEMP: temp,
       HEAD_SHA: ctx.head,
-      MERGE_SHA: ctx.merge,
+      MERGE_SHA: ctx.merge ?? '',
       PR_TITLE: ctx.title,
       ...extraEnv,
     },
@@ -77,41 +74,116 @@ function runIn(t, ctx, clone, script, extraEnv = {}) {
 const originGit = (ctx, ...args) =>
   execFileSync('git', ['--git-dir', ctx.origin, ...args], { env: ctx.env, encoding: 'utf8' }).trim()
 
-test('verify-merge: a merge commit of the PR head passes', t => {
-  const ctx = released(t)
-  const result = run(t, ctx, 'verify-merge.sh')
+// A gh that logs each call. `gh release view` answers with GH_VIEW_STATUS;
+// `gh api` (the check runs) prints GH_CHECK_RUN, as its --jq would.
+function stubGh(t) {
+  const bin = tempDir(t)
+  const log = join(bin, 'gh.log')
+  writeFileSync(
+    join(bin, 'gh'),
+    '#!/bin/sh\necho "$*" >> "$GH_LOG"\n' +
+      '[ "$1 $2" = "release view" ] && exit "${GH_VIEW_STATUS:-1}"\n' +
+      '[ "$1" = api ] && printf \'%s\\n\' "${GH_CHECK_RUN:-}"\n' +
+      'exit 0\n',
+    { mode: 0o755 },
+  )
+  return { bin, log }
+}
+
+// verify.sh's env: the stub gh, and the PR check passed unless overridden.
+function checkEnv(t, extra = {}) {
+  const gh = stubGh(t)
+  return {
+    PATH: `${gh.bin}:${process.env.PATH}`,
+    GH_LOG: gh.log,
+    GH_REPO: 'o/r',
+    CHECK_NAME: 'pr-check / Release PR',
+    GH_CHECK_RUN: 'completed success',
+    CHECK_POLL: '0',
+    ...extra,
+  }
+}
+
+test('verify: dev at the PR head, main behind it, the check passed', t => {
+  const ctx = releasePr(t)
+  const env = checkEnv(t)
+  const result = run(t, ctx, 'verify.sh', env)
   assert.equal(result.status, 0, result.log)
+  assert.match(result.log, /'main' fast-forwards to 'dev'/)
+  assert.match(
+    readFileSync(env.GH_LOG, 'utf8'),
+    new RegExp(`commits/${ctx.head}/check-runs .*check_name=pr-check / Release PR`),
+  )
 })
 
-test('verify-merge: a squash or rebase merge, or another head, fails', t => {
-  const ctx = released(t)
-  ctx.git('reset', '--quiet', '--hard', 'v1.3.0')
-  ctx.git('merge', '--quiet', '--squash', 'dev')
-  ctx.git('commit', '--quiet', '-m', 'feat: release v1.4.0')
-  ctx.git('push', '--quiet', '--force', 'origin', 'main')
-  const squash = run(t, { ...ctx, merge: ctx.git('rev-parse', 'HEAD').trim() }, 'verify-merge.sh')
-  assert.equal(squash.status, 1)
-  assert.match(squash.log, /was not merged with a merge commit/)
-
-  const other = run(t, { ...ctx, head: ctx.git('rev-parse', 'v1.3.0').trim() }, 'verify-merge.sh')
-  assert.equal(other.status, 1)
+test('verify: the check failed, never ran, or is still running', t => {
+  const ctx = releasePr(t)
+  for (const [check, pattern] of [
+    ['completed failure', /concluded 'failure'/],
+    ['', /never ran/],
+    ['in_progress null', /still 'in_progress'/],
+  ]) {
+    const env = checkEnv(t, { GH_CHECK_RUN: check, CHECK_TIMEOUT: '0' })
+    const result = run(t, ctx, 'verify.sh', env)
+    assert.equal(result.status, 1, check)
+    assert.match(result.log, pattern)
+  }
 })
 
-test('release: bumps package.json in a release commit, tags it, pushes main and the tag', t => {
-  const ctx = released(t, { files: { 'package.json': '{ "name": "x", "version": "1.3.0" }\n' } })
+test('verify: dev moved, main has commits dev does not, or dev has a merge commit', t => {
+  const moved = releasePr(t)
+  moved.git('commit', '--quiet', '--allow-empty', '-m', 'fix: c3')
+  moved.git('push', '--quiet', 'origin', 'dev')
+  const movedResult = run(t, moved, 'verify.sh', checkEnv(t))
+  assert.equal(movedResult.status, 1)
+  assert.match(movedResult.log, /'dev' moved since the release PR was labelled/)
+
+  const ahead = releasePr(t)
+  ahead.git('switch', '--quiet', 'main')
+  ahead.git('commit', '--quiet', '--allow-empty', '-m', 'fix: hotfix')
+  ahead.git('push', '--quiet', 'origin', 'main')
+  const aheadResult = run(t, ahead, 'verify.sh', checkEnv(t))
+  assert.equal(aheadResult.status, 1)
+  assert.match(aheadResult.log, /cannot fast-forward to 'dev'/)
+
+  const merged = releasePr(t)
+  merged.git('switch', '--quiet', '-c', 'side', 'HEAD^')
+  merged.git('commit', '--quiet', '--allow-empty', '-m', 'fix: side')
+  merged.git('switch', '--quiet', 'dev')
+  merged.git('merge', '--quiet', '--no-ff', '--no-edit', 'side')
+  merged.git('push', '--quiet', 'origin', 'dev')
+  merged.head = merged.git('rev-parse', 'HEAD').trim()
+  const mergedResult = run(t, merged, 'verify.sh', checkEnv(t))
+  assert.equal(mergedResult.status, 1)
+  assert.match(mergedResult.log, /1 merge commit\(s\)/)
+})
+
+test('verify: a head already on main is a re-run', t => {
+  const ctx = releasePr(t)
+  assert.equal(run(t, ctx, 'release.sh').status, 0)
+  const result = run(t, ctx, 'verify.sh', checkEnv(t, { GH_CHECK_RUN: '' }))
+  assert.equal(result.status, 0, result.log)
+  assert.match(result.log, /already on 'main': a re-run/)
+})
+
+test('release: bumps package.json in a release commit, tags it, fast-forwards main and dev', t => {
+  const ctx = releasePr(t, { files: { 'package.json': '{ "name": "x", "version": "1.3.0" }\n' } })
   const result = run(t, ctx, 'release.sh')
   assert.equal(result.status, 0, result.log)
   assert.equal(result.output.tag, 'v1.4.0')
 
   assert.equal(originGit(ctx, 'rev-parse', 'main'), result.output.sha)
+  assert.equal(originGit(ctx, 'rev-parse', 'dev'), result.output.sha)
   assert.equal(originGit(ctx, 'rev-parse', 'v1.4.0^{commit}'), result.output.sha)
   assert.equal(originGit(ctx, 'log', '-1', '--format=%s', 'main'), 'chore(release): 1.4.0')
-  assert.equal(originGit(ctx, 'rev-parse', 'main^'), ctx.merge)
+  // The PR's commits reached main as they are: no merge commit, same SHAs.
+  assert.equal(originGit(ctx, 'rev-parse', 'main^'), ctx.head)
+  assert.equal(originGit(ctx, 'rev-list', '--merges', '--count', 'main'), '0')
   const pkg = JSON.parse(originGit(ctx, 'show', 'main:package.json'))
   assert.equal(pkg.version, '1.4.0')
   assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), result.output.sha)
 
-  // A re-run (a fresh checkout at the merge commit) finds the tag.
+  // A re-run (a fresh checkout at the PR's head) finds the tag.
   const again = run(t, ctx, 'release.sh')
   assert.equal(again.status, 0, again.log)
   assert.equal(again.output.sha, result.output.sha)
@@ -119,21 +191,23 @@ test('release: bumps package.json in a release commit, tags it, pushes main and 
   assert.equal(originGit(ctx, 'rev-parse', 'main'), result.output.sha)
 })
 
-test('release: without package.json the merge commit itself is tagged', t => {
-  const ctx = released(t)
+test('release: without package.json the PR head itself is tagged', t => {
+  const ctx = releasePr(t)
   const result = run(t, ctx, 'release.sh')
   assert.equal(result.status, 0, result.log)
-  assert.equal(result.output.sha, ctx.merge)
-  assert.equal(originGit(ctx, 'rev-parse', 'v1.4.0^{commit}'), ctx.merge)
+  assert.equal(result.output.sha, ctx.head)
+  assert.equal(originGit(ctx, 'rev-parse', 'v1.4.0^{commit}'), ctx.head)
+  assert.equal(originGit(ctx, 'rev-parse', 'main'), ctx.head)
+  assert.equal(originGit(ctx, 'rev-parse', 'dev'), ctx.head)
 })
 
 test('release: the major tag moves to the release, and a re-run only ever moves it forward', t => {
-  const ctx = released(t)
+  const ctx = releasePr(t)
   ctx.git('tag', 'v1', 'v1.3.0')
   ctx.git('push', '--quiet', 'origin', 'v1')
   const result = run(t, ctx, 'release.sh')
   assert.equal(result.status, 0, result.log)
-  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), ctx.merge)
+  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), ctx.head)
   assert.equal(
     originGit(ctx, 'rev-parse', 'v1.3.0^{commit}'),
     ctx.git('rev-parse', 'v1.3.0').trim(),
@@ -144,7 +218,7 @@ test('release: the major tag moves to the release, and a re-run only ever moves 
   const created = run(t, ctx, 'release.sh')
   assert.equal(created.status, 0, created.log)
   assert.match(created.log, /Moved v1 to v1\.4\.0/)
-  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), ctx.merge)
+  assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), ctx.head)
 
   // Ahead (a later release): a re-run of this one leaves it there.
   ctx.git('commit', '--quiet', '--allow-empty', '-m', 'fix: later')
@@ -156,88 +230,51 @@ test('release: the major tag moves to the release, and a re-run only ever moves 
   assert.equal(originGit(ctx, 'rev-parse', 'v1^{commit}'), later)
 })
 
-test('release: a PR title main does not compute releases nothing', t => {
-  const ctx = released(t, { title: 'fix: release v1.3.1' })
+test('release: a PR title the head does not compute releases nothing', t => {
+  const ctx = releasePr(t, { title: 'fix: release v1.3.1' })
   const result = run(t, ctx, 'release.sh')
   assert.equal(result.status, 1)
-  assert.match(result.log, /main' computes 'feat: release v1\.4\.0'/)
+  assert.match(result.log, /its head computes 'feat: release v1\.4\.0'/)
   assert.equal(originGit(ctx, 'tag', '--list', 'v1.4.0'), '')
 })
 
-test('sync-dev: dev fast-forwards to the release', t => {
-  const ctx = released(t, { files: { 'package.json': '{ "name": "x", "version": "1.3.0" }\n' } })
-  const release = run(t, ctx, 'release.sh')
-  const result = runIn(t, ctx, release.clone, 'sync-dev.sh', { RELEASE_SHA: release.output.sha })
-  assert.equal(result.status, 0, result.log)
-  assert.equal(originGit(ctx, 'rev-parse', 'dev'), release.output.sha)
-
-  const again = runIn(t, ctx, release.clone, 'sync-dev.sh', { RELEASE_SHA: release.output.sha })
-  assert.equal(again.status, 0, again.log)
-  assert.match(again.log, /already at the release/)
-})
-
-test('sync-dev: work landed on dev meanwhile — main is merged into it', t => {
-  const ctx = released(t, { files: { 'package.json': '{ "name": "x", "version": "1.3.0" }\n' } })
-  const release = run(t, ctx, 'release.sh')
-  ctx.git('switch', '--quiet', 'dev')
-  ctx.git('commit', '--quiet', '--allow-empty', '-m', 'fix: c4')
+test('release: dev moved during the release, so nothing is pushed', t => {
+  const ctx = releasePr(t)
+  ctx.git('commit', '--quiet', '--allow-empty', '-m', 'fix: c3')
   ctx.git('push', '--quiet', 'origin', 'dev')
-  const c4 = ctx.git('rev-parse', 'HEAD').trim()
-
-  const result = runIn(t, ctx, release.clone, 'sync-dev.sh', { RELEASE_SHA: release.output.sha })
-  assert.equal(result.status, 0, result.log)
-  assert.equal(originGit(ctx, 'log', '-1', '--format=%s', 'dev'), "Merge branch 'main' into dev")
-  assert.equal(originGit(ctx, 'rev-parse', 'dev^1'), c4)
-  assert.equal(originGit(ctx, 'rev-parse', 'dev^2'), release.output.sha)
-
-  // The next release PR starts from the new tag: c4 alone.
-  ctx.git('pull', '--quiet', '--ff-only', '--tags', 'origin', 'dev')
-  const title = execFileSync('node', [join(ROOT, 'scripts', 'release-title.mjs')], {
-    cwd: ctx.dir,
-    env: ctx.env,
-    encoding: 'utf8',
-  })
-  assert.equal(title.trim(), 'fix: release v1.4.1')
+  const result = run(t, ctx, 'release.sh')
+  assert.equal(result.status, 1)
+  assert.match(result.log, /moved during the release, so nothing was pushed/)
+  assert.equal(originGit(ctx, 'tag', '--list', 'v1.4.0'), '')
+  assert.equal(originGit(ctx, 'rev-parse', 'main'), ctx.git('rev-parse', 'v1.3.0').trim())
 })
 
-test('sync-dev: a conflict or a rewritten dev fails, dev untouched', t => {
-  const ctx = released(t, { files: { 'package.json': '{ "name": "x", "version": "1.3.0" }\n' } })
+test('check-merged: a release PR shipped by fast-forward passes', t => {
+  const ctx = releasePr(t)
   const release = run(t, ctx, 'release.sh')
-  ctx.git('switch', '--quiet', 'dev')
-  writeFile(ctx.dir, 'package.json', '{ "name": "x", "version": "9.9.9" }\n')
-  ctx.git('commit', '--quiet', '-am', 'fix: c4')
-  ctx.git('push', '--quiet', 'origin', 'dev')
-  const c4 = ctx.git('rev-parse', 'HEAD').trim()
-
-  const conflict = runIn(t, ctx, release.clone, 'sync-dev.sh', { RELEASE_SHA: release.output.sha })
-  assert.equal(conflict.status, 1)
-  assert.match(conflict.log, /conflicts/)
-  assert.equal(originGit(ctx, 'rev-parse', 'dev'), c4)
-
-  ctx.git('switch', '--quiet', '--orphan', 'other')
-  ctx.git('commit', '--quiet', '--allow-empty', '-m', 'chore: unrelated')
-  ctx.git('push', '--quiet', '--force', 'origin', 'other:dev')
-  const rewritten = runIn(t, ctx, release.clone, 'sync-dev.sh', {
-    RELEASE_SHA: release.output.sha,
-  })
-  assert.equal(rewritten.status, 1)
-  assert.match(rewritten.log, /no longer contains the release PR's head/)
+  const result = run(t, { ...ctx, merge: release.output.sha }, 'check-merged.sh')
+  assert.equal(result.status, 0, result.log)
+  assert.match(result.log, /released by fast-forward/)
 })
 
-// A gh that logs each call; `gh release view` answers with GH_VIEW_STATUS.
-function stubGh(t) {
-  const bin = tempDir(t)
-  const log = join(bin, 'gh.log')
-  writeFileSync(
-    join(bin, 'gh'),
-    '#!/bin/sh\necho "$*" >> "$GH_LOG"\n[ "$1 $2" = "release view" ] && exit "${GH_VIEW_STATUS:-1}"\nexit 0\n',
-    { mode: 0o755 },
+test('check-merged: a release PR merged with a button fails with how to put main back', t => {
+  const ctx = releasePr(t)
+  ctx.git('switch', '--quiet', 'main')
+  ctx.git('merge', '--quiet', '--squash', 'dev')
+  ctx.git('commit', '--quiet', '-m', 'feat: release v1.4.0')
+  ctx.git('push', '--quiet', 'origin', 'main')
+  const merge = ctx.git('rev-parse', 'HEAD').trim()
+  const result = run(t, { ...ctx, merge }, 'check-merged.sh')
+  assert.equal(result.status, 1)
+  assert.match(result.log, /merged with a GitHub merge button/)
+  const before = ctx.git('rev-parse', 'v1.3.0').trim()
+  assert.ok(
+    result.log.includes(`--force-with-lease=main:${merge} origin ${before}:refs/heads/main`),
   )
-  return { bin, log }
-}
+})
 
 test('publish: creates the Release with the PR description, or edits it on a re-run', t => {
-  const ctx = released(t)
+  const ctx = releasePr(t)
   const release = run(t, ctx, 'release.sh')
   const gh = stubGh(t)
   const env = {
@@ -264,7 +301,7 @@ test('publish: creates the Release with the PR description, or edits it on a re-
 })
 
 test('publish: without a PR description, the changelog since the previous tag', t => {
-  const ctx = released(t)
+  const ctx = releasePr(t)
   const release = run(t, ctx, 'release.sh')
   const gh = stubGh(t)
   const result = runIn(t, ctx, release.clone, 'publish.sh', {

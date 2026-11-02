@@ -1,10 +1,14 @@
 {
-  "$comment": "dev is the integration branch: it cannot be deleted or force-pushed. The Release workflow only fast-forwards it (or merges main into it), so nothing in the pipeline needs a bypass.",
+  "$comment": "dev is the integration branch: it cannot be deleted or force-pushed, and its history stays linear (main fast-forwards to it). Work PRs squash into it; the Release workflow only fast-forwards it to the release commit, so nothing in the pipeline needs a bypass.",
   "name": "ci: protect dev",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
     "ref_name": { "include": ["refs/heads/dev"], "exclude": [] }
   },
-  "rules": [{ "type": "deletion" }, { "type": "non_fast_forward" }]
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "required_linear_history" }
+  ]
 }
