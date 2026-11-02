@@ -25,6 +25,40 @@ There are three kinds of branch, and history stays **linear**: no merge commits 
 | `dev`                  | forever     | squash-merged work PRs                           | never                                      |
 | `main`                 | forever     | the Release workflow fast-forwarding it to `dev` | never                                      |
 
+The two hops merge differently:
+
+- **work branch → `dev`: squash merge.** All of a branch's commits become one commit on `dev`, titled after the PR.
+- **`dev` → `main`: fast-forward.** `main` moves forward to `dev`'s commits as they are. It gets no new commits and no merge commit.
+
+What happens to the commits:
+
+```text
+1. Work on a branch: as many commits as you like.
+
+   feat/search-filters        a ── b ── c
+                             /
+   dev, main      ── X ────┘
+
+2. Squash-merge the work PR: a, b and c become ONE new commit S on dev.
+   The branch is deleted; main has not moved.
+
+   dev            ── X ── S                   S = feat: add search filters (#12)
+   main           ── X
+
+3. More work PRs land on dev the same way, one commit each.
+
+   dev            ── X ── S ── T              T = fix: empty results (#13)
+   main           ── X
+
+4. Add the `ship` label to the release PR: the Release workflow adds the
+   release commit R, then moves main AND dev forward to it. Nothing is merged
+   or rewritten: main gets dev's exact commits, with the same SHAs.
+
+   dev, main      ── X ── S ── T ── R         R = chore(release): 1.4.0, tagged v1.4.0
+```
+
+After step 4, `dev` and `main` point at the same commit, so the next work branch starts from the release.
+
 ### 1. Work on a branch
 
 Branch off `dev`. The branch name is `<type>/<description>`, where `<type>` is one of the [work types](#work-types):
