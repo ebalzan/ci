@@ -29,8 +29,13 @@ function check({ pr = {}, ...rest } = {}) {
   })
 }
 
-test('a complete one passes, whoever opened it and however big', () => {
-  assert.deepEqual(check(), { fails: [], warnings: [] })
+test('a complete one passes, whoever opened it and however big, and says how to ship it', () => {
+  const result = check()
+  assert.deepEqual(result.fails, [])
+  assert.deepEqual(result.warnings, [])
+  assert.equal(result.messages.length, 1)
+  assert.match(result.messages[0], /add the `ship` label/)
+  assert.deepEqual(check({ pr: { assignees: [] } }).messages, [])
 })
 
 test('base must be main', () => {
@@ -54,11 +59,18 @@ test('what every PR needs applies too', () => {
 })
 
 test('dev behind main fails; a major release warns', () => {
-  failsWith(check({ behindBy: 2 }), /`main` has 2 commits that `dev` does not/)
+  failsWith(
+    check({ behindBy: 2 }),
+    /`main` has 2 commits that `dev` does not, so it cannot fast-forward/,
+  )
   const major = check({
     pr: { title: 'feat!: release v2.0.0' },
     releaseTitle: 'feat!: release v2.0.0',
   })
   assert.deepEqual(major.fails, [])
   assert.match(major.warnings[0], /\*\*major\*\*/)
+})
+
+test('a merge commit on dev fails: main only fast-forwards', () => {
+  failsWith(check({ mergeCommits: 1 }), /`dev` has 1 merge commit: history must stay linear/)
 })

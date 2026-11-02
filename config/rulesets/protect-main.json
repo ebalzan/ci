@@ -1,10 +1,14 @@
 {
-  "$comment": "main is the release branch: it cannot be deleted or force-pushed. The Release workflow only fast-forwards it with the `chore(release): X.Y.Z` commit, so nothing in the pipeline needs a bypass.",
+  "$comment": "main is the release branch: it cannot be deleted or force-pushed, and its history stays linear. The Release workflow only fast-forwards it to dev (plus the `chore(release): X.Y.Z` commit), so nothing in the pipeline needs a bypass.",
   "name": "ci: protect main",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
     "ref_name": { "include": ["refs/heads/main"], "exclude": [] }
   },
-  "rules": [{ "type": "deletion" }, { "type": "non_fast_forward" }]
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "required_linear_history" }
+  ]
 }

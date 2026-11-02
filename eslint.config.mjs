@@ -9,6 +9,8 @@ export default [
     // Danger injects these into the dangerfile at run time.
     name: 'ci/dangerfile',
     files: ['actions/*/dangerfile.mjs'],
-    languageOptions: { globals: { danger: 'readonly', fail: 'readonly', warn: 'readonly' } },
+    languageOptions: {
+      globals: { danger: 'readonly', fail: 'readonly', warn: 'readonly', message: 'readonly' },
+    },
   },
 ]

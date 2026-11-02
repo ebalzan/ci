@@ -1,47 +1,49 @@
-# Cuts the release the merged dev → main release PR stands for. Runs on the
-# pull_request `closed` event of that PR (the calling job checks it was merged
-# and its head is dev):
+# Cuts the release the dev → main release PR stands for. The release PR is
+# never merged with a GitHub button: adding the `ship` label to it runs this
+# action, which fast-forwards main to dev — the same commits, the same SHAs,
+# no merge commit — and GitHub then marks the PR merged. Runs on the
+# pull_request event of that PR (the calling job checks its head is dev):
 #
 #   1. Set up             CI_ROOT (this repo's copy) for the later steps; the
 #                         root package (git-cliff); the AUTO_* variables and
 #                         the branch defaults (scripts/shared-vars.mjs).
-#   2. Verify merge       the PR was merged with a merge commit whose second
-#                         parent is the PR's head: dev's commits reached main
-#                         unchanged, so dev can catch up without a force-push.
-#                         Squash and rebase fail here, before anything is
-#                         tagged. verify-merge.sh.
-#   3. Version and tag    the title scripts/release-title.mjs computes on main
-#                         must equal the PR title; vX.Y.Z comes from it. With a
-#                         package.json, a `chore(release): X.Y.Z` commit bumps
-#                         it (and the lockfile); the tag goes on that commit,
-#                         else on the merge commit. Main, the tag and the
-#                         moving major tag vX (what callers pin) are pushed
-#                         together. A re-run finds the tag and skips this, but
-#                         for a missing or older vX. release.sh.
+#   2. Verify             `labeled`: dev is still the PR's head, main is in its
+#                         history (a fast-forward), it has no merge commit, and
+#                         the PR check passed on it (waits while it runs). A
+#                         head already on main is a re-run. verify.sh.
+#   3. Version and tag    the title scripts/release-title.mjs computes for the
+#                         head must equal the PR title; vX.Y.Z comes from it.
+#                         With a package.json, a `chore(release): X.Y.Z` commit
+#                         bumps it (and the lockfile); the tag goes on that
+#                         commit, else on the head. main and dev (both
+#                         fast-forwarded to it), the tag and the moving major
+#                         tag vX (what callers pin) are pushed in one atomic
+#                         push. A re-run finds the tag and skips this, but for
+#                         a missing or older vX. release.sh.
 #   4. Publish            the GitHub Release vX.Y.Z, its notes the PR's
 #                         description (AI summary + changelog), else the
 #                         git-cliff changelog. publish.sh.
-#   5. Sync dev           dev fast-forwards to the release, or — when work
-#                         landed on it meanwhile — main is merged into it, so
-#                         the next release PR starts from the release.
-#                         sync-dev.sh.
 #
-# Needs a full-history checkout of the merge commit with push credentials and
+#   Check merged          `closed`, instead of 2–4: the PR was merged with a
+#                         GitHub button (squash or rebase rewrite dev's
+#                         commits), so nothing was released. Fails with how to
+#                         put main back. check-merged.sh.
+#
+# Needs a full-history checkout of the PR's head with push credentials and
 # Node >= 22; AUTO_BASE_BRANCH and AUTO_RELEASE_BRANCH default to dev and main.
-# Used by
-# templates/.github/workflows/release.yml (onboarded repos).
+# Used by templates/.github/workflows/release.yml (onboarded repos).
 name: Release
-description: Version, tag and publish the GitHub Release of a merged dev → main release PR, then bring dev up to main.
+description: Fast-forward main to the labelled dev → main release PR, then version, tag and publish its GitHub Release.
 inputs:
   github-token:
-    description: Token for gh (contents write).
+    description: Token for gh (contents write, checks read).
     default: ${{ github.token }}
-  dev-token:
-    description: Token that pushes dev, so the push triggers Auto PR (a classic PAT with `repo`). Empty uses the checkout's credentials.
-    default: ''
+  check-name:
+    description: The check that must have passed on the release PR's head.
+    default: pr-check / Release PR
 outputs:
   tag:
-    description: The new vX.Y.Z tag.
+    description: The new vX.Y.Z tag; empty when nothing was released.
     value: ${{ steps.release.outputs.tag }}
   sha:
     description: The commit the tag points at.
@@ -57,22 +59,35 @@ runs:
         npm ci --ignore-scripts --no-audit --no-fund --prefix "$CI_ROOT"
         node "$CI_ROOT/scripts/shared-vars.mjs"
 
-    - name: Verify merge
+    - name: Check merged
+      if: ${{ github.event.action == 'closed' }}
       shell: bash
       env:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-      run: bash "$GITHUB_ACTION_PATH/verify-merge.sh"
+      run: bash "$GITHUB_ACTION_PATH/check-merged.sh"
+
+    - name: Verify
+      if: ${{ github.event.action == 'labeled' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        CHECK_NAME: ${{ inputs.check-name }}
+      run: bash "$GITHUB_ACTION_PATH/verify.sh"
 
     - name: Version and tag
       id: release
+      if: ${{ github.event.action == 'labeled' }}
       shell: bash
       env:
         PR_TITLE: ${{ github.event.pull_request.title }}
-        MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: bash "$GITHUB_ACTION_PATH/release.sh"
 
     - name: Publish
+      if: ${{ github.event.action == 'labeled' }}
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
@@ -80,11 +95,3 @@ runs:
         PR_BODY: ${{ github.event.pull_request.body }}
         TAG: ${{ steps.release.outputs.tag }}
       run: bash "$GITHUB_ACTION_PATH/publish.sh"
-
-    - name: Sync dev
-      shell: bash
-      env:
-        DEV_TOKEN: ${{ inputs.dev-token }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        RELEASE_SHA: ${{ steps.release.outputs.sha }}
-      run: bash "$GITHUB_ACTION_PATH/sync-dev.sh"

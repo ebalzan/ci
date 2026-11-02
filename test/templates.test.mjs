@@ -7,6 +7,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
+import { SHIP_LABEL } from '../actions/pr-checks/release-pr/rules.mjs'
 import { ROOT } from './helpers.mjs'
 
 const TEMPLATE_WORKFLOWS = join(ROOT, 'templates', '.github', 'workflows')
@@ -43,4 +44,12 @@ test('pr-checks.yml reports the check names the shared rulesets require', () => 
       }
     }
   }
+})
+
+test('release.yml ships on the label the release PR rules name, which auto-pr creates', () => {
+  const text = read('release.yml')
+  assert.ok(text.includes(`github.event.label.name == '${SHIP_LABEL}'`))
+  assert.match(text, /types: \[labeled, closed\]/)
+  const syncMetadata = readFileSync(join(ROOT, 'actions', 'auto-pr', 'sync-metadata.sh'), 'utf8')
+  assert.ok(syncMetadata.includes(`gh label create ${SHIP_LABEL} `))
 })

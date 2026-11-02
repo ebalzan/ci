@@ -1,5 +1,5 @@
 {
-  "$comment": "Changes reach dev only through a squash-merged work PR whose 'pr-check / Work PR' check passed — its title becomes the one commit on dev. main is require-release-pr.json's. DISABLED by default: the Release workflow brings dev up to main with GITHUB_TOKEN (a fast-forward, or a merge of main when work landed meanwhile), so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-pull-request.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through.",
+  "$comment": "Changes reach dev only through a squash-merged work PR whose 'pr-check / Work PR' check passed — its title becomes the one commit on dev. main is require-release-pr.json's. DISABLED by default: the Release workflow fast-forwards dev to the release commit with GITHUB_TOKEN, so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-pull-request.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through.",
   "name": "ci: require pull request",
   "target": "branch",
   "enforcement": "disabled",
