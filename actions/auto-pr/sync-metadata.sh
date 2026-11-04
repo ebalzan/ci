@@ -10,7 +10,9 @@
 # best-effort: a failure is a warning, and the PR check then names what is
 # missing.
 #
-# Env: GH_TOKEN, GH_REPO, PR_URL, PR_LABEL, plus the runner's GITHUB_*.
+# Env: GH_TOKEN (GITHUB_TOKEN: its edits start no workflow), PROJECT_TOKEN (the
+# board, out of GITHUB_TOKEN's reach), GH_REPO, PR_URL, PR_LABEL, plus the
+# runner's GITHUB_*.
 set -uo pipefail
 
 if [ "$PR_LABEL" = release ]; then
@@ -54,6 +56,7 @@ fi
 # field asked for, even in a fragment that does not apply, so the owner's type
 # comes first and then only that type is queried.
 if [ -n "${AUTO_PROJECT_NUMBER:-}" ]; then
+  export GH_TOKEN="$PROJECT_TOKEN"
   owner="${AUTO_PROJECT_OWNER:-$GITHUB_REPOSITORY_OWNER}"
   project=''
   case "$(gh api graphql -f "login=$owner" \

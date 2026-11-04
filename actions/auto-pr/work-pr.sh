@@ -3,11 +3,10 @@
 # work-pr.sh — the "Find or open PR" step of actions/auto-pr on a work branch.
 #
 # Checks the branch is <type>/<description>, then finds its open PR or opens a
-# DRAFT one into AUTO_BASE_BRANCH. The type, the type list and the title come
-# from scripts/types.mjs. Writes to GITHUB_OUTPUT:
+# one into AUTO_BASE_BRANCH. The type, the type list and the title come from
+# scripts/types.mjs. Writes to GITHUB_OUTPUT:
 #   label    the branch's type, the PR's label
 #   url      the PR's URL; not set when the branch has nothing to merge yet
-#   created  true when this run opened the PR
 #
 # Env: GH_TOKEN, GH_REPO, plus the runner's GITHUB_* and RUNNER_TEMP.
 set -euo pipefail
@@ -36,8 +35,7 @@ if [ -z "$url" ]; then
   fi
   body="$RUNNER_TEMP/auto-pr-commits.md"
   { echo '## Commits'; echo; git log --reverse --format='- %s' "origin/$base..HEAD"; } > "$body"
-  url="$(gh pr create --draft --base "$base" --head "$branch" --title "$title" --body-file "$body")"
-  echo "created=true" >> "$GITHUB_OUTPUT"
+  url="$(gh pr create --base "$base" --head "$branch" --title "$title" --body-file "$body")"
   echo "::notice::Opened $url"
 fi
 echo "url=$url" >> "$GITHUB_OUTPUT"

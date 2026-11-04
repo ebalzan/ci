@@ -46,6 +46,26 @@ test('pr-checks.yml reports the check names the shared rulesets require', () => 
   }
 })
 
+test('auto-pr edits the PR with GITHUB_TOKEN, so only the push or the new PR starts PR Checks', () => {
+  const action = readFileSync(join(ROOT, 'actions', 'auto-pr', 'action.yml'), 'utf8')
+  const stepEnv = name => action.split(`- name: ${name}\n`)[1].split('run:')[0]
+  assert.match(stepEnv('Find or open PR'), /EDIT_TOKEN: \$\{\{ github\.token \}\}/)
+  for (const step of ['Sync metadata', 'Describe']) {
+    assert.match(stepEnv(step), /GH_TOKEN: \$\{\{ github\.token \}\}/, step)
+  }
+  assert.doesNotMatch(action, /gh pr ready/)
+})
+
+test('pr-checks waits for auto-pr only on the events auto-pr goes with', () => {
+  const action = readFileSync(join(ROOT, 'actions', 'pr-checks', 'action.yml'), 'utf8')
+  const wait = action.split('- name: Wait for Auto PR\n')[1].split('- name:')[0]
+  assert.match(wait, /\["opened", "synchronize"\]/)
+  assert.ok(
+    action.indexOf('- name: Wait for Auto PR') < action.indexOf('- name: Conventional title'),
+    'the wait comes before any check',
+  )
+})
+
 test('release.yml ships on the label the release PR rules name, which auto-pr creates', () => {
   const text = read('release.yml')
   assert.ok(text.includes(`github.event.label.name == '${SHIP_LABEL}'`))

@@ -27,6 +27,10 @@
 # Renovate's PRs (chore/renovate-*) get the two commitlint steps only: Renovate
 # opens and rewrites them itself, with no board, milestone or AI description.
 #
+# On a push or a new PR it first waits for that commit's Auto PR run, which fills
+# the PR in (wait-for-auto-pr.sh). So the title and the metadata are read when
+# they are checked, not from the event that started the run.
+#
 # Needs a full-history checkout of the PR head, Node, and the job env
 # REPO_VARS_JSON (the caller's `vars`); AUTO_BASE_BRANCH and AUTO_RELEASE_BRANCH
 # default to dev and main (scripts/shared-vars.mjs).
@@ -55,12 +59,23 @@ runs:
         npm ci --ignore-scripts --no-audit --no-fund --prefix "$CI_ROOT"
         node "$CI_ROOT/scripts/shared-vars.mjs"
 
+    - name: Wait for Auto PR
+      if: ${{ contains(fromJSON('["opened", "synchronize"]'), github.event.action) && !startsWith(github.event.pull_request.head.ref, 'chore/renovate-') }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.project-token || inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: bash "$GITHUB_ACTION_PATH/wait-for-auto-pr.sh"
+
     - name: Conventional title
       if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       shell: bash
       env:
-        PR_TITLE: ${{ github.event.pull_request.title }}
-      run: printf '%s\n' "$PR_TITLE" | bash "$CI_ROOT/scripts/commitlint.sh"
+        GH_TOKEN: ${{ inputs.github-token }}
+        GH_REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq .title | bash "$CI_ROOT/scripts/commitlint.sh"
 
     - name: Conventional commits
       if: ${{ !cancelled() && steps.install.outcome == 'success' }}
