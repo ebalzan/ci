@@ -11,6 +11,8 @@
 #   - main..head has no merge commit.
 #   - CHECK_NAME passed on the head; while it is queued or running, waits
 #     (CHECK_TIMEOUT seconds, default 900, polling every CHECK_POLL, default 15).
+#     A skipped run does not count: adding the `ship` label starts one, which
+#     says nothing about the head.
 #
 # Env: GH_TOKEN, GH_REPO, HEAD_SHA (the PR's head), CHECK_NAME.
 set -euo pipefail
@@ -44,11 +46,12 @@ if [ "$merges" -gt 0 ]; then
   exit 1
 fi
 
-# The newest run of CHECK_NAME on the head: "<status> <conclusion>", or "".
+# The newest run of CHECK_NAME on the head that was not skipped:
+# "<status> <conclusion>", or "".
 latest_check() {
   gh api -X GET "repos/$GH_REPO/commits/$HEAD_SHA/check-runs" \
     -f "check_name=$CHECK_NAME" -f filter=all -f per_page=100 \
-    --jq '.check_runs | sort_by(.id) | last | select(.) | "\(.status) \(.conclusion)"'
+    --jq '.check_runs | map(select(.conclusion != "skipped")) | sort_by(.id) | last | select(.) | "\(.status) \(.conclusion)"'
 }
 
 deadline=$((SECONDS + ${CHECK_TIMEOUT:-900}))

@@ -66,6 +66,17 @@ test('pr-checks waits for auto-pr only on the events auto-pr goes with', () => {
   )
 })
 
+test('pr-checks skips only adding the ship label to the release PR', () => {
+  const text = read('pr-checks.yml')
+  const adding = `github.event.action == 'labeled' && github.event.label.name == '${SHIP_LABEL}'`
+  const ifOf = job => text.split(`name: pr-check / ${job}\n`)[1].split('\n')[0]
+  assert.ok(ifOf('Release PR').includes(`!(${adding})`))
+  assert.doesNotMatch(ifOf('Work PR'), /label/)
+  assert.ok(
+    text.includes(`${adding} && github.event.pull_request.head.ref == 'dev' && '-ship' || ''`),
+  )
+})
+
 test('release.yml ships on the label the release PR rules name, which auto-pr creates', () => {
   const text = read('release.yml')
   assert.ok(text.includes(`github.event.label.name == '${SHIP_LABEL}'`))

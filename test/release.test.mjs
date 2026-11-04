@@ -75,7 +75,8 @@ const originGit = (ctx, ...args) =>
   execFileSync('git', ['--git-dir', ctx.origin, ...args], { env: ctx.env, encoding: 'utf8' }).trim()
 
 // A gh that logs each call. `gh release view` answers with GH_VIEW_STATUS;
-// `gh api` (the check runs) prints GH_CHECK_RUN, as its --jq would.
+// `gh api` (the check runs) prints GH_CHECK_RUN, as its --jq would, or runs its
+// real --jq filter over GH_CHECK_RUNS (the API's JSON).
 function stubGh(t) {
   const bin = tempDir(t)
   const log = join(bin, 'gh.log')
@@ -83,6 +84,11 @@ function stubGh(t) {
     join(bin, 'gh'),
     '#!/bin/sh\necho "$*" >> "$GH_LOG"\n' +
       '[ "$1 $2" = "release view" ] && exit "${GH_VIEW_STATUS:-1}"\n' +
+      'if [ "$1" = api ] && [ -n "${GH_CHECK_RUNS:-}" ]; then\n' +
+      '  while [ "$1" != --jq ]; do shift; done\n' +
+      '  printf %s "$GH_CHECK_RUNS" | jq -r "$2"\n' +
+      '  exit 0\n' +
+      'fi\n' +
       '[ "$1" = api ] && printf \'%s\\n\' "${GH_CHECK_RUN:-}"\n' +
       'exit 0\n',
     { mode: 0o755 },
@@ -126,6 +132,25 @@ test('verify: the check failed, never ran, or is still running', t => {
     const env = checkEnv(t, { GH_CHECK_RUN: check, CHECK_TIMEOUT: '0' })
     const result = run(t, ctx, 'verify.sh', env)
     assert.equal(result.status, 1, check)
+    assert.match(result.log, pattern)
+  }
+})
+
+test('verify: the skipped run the ship label starts does not count', t => {
+  const ctx = releasePr(t)
+  const skipped = { id: 9, status: 'completed', conclusion: 'skipped' }
+  for (const [earlier, status, pattern] of [
+    [{ id: 1, status: 'completed', conclusion: 'success' }, 0, /'main' fast-forwards to 'dev'/],
+    [{ id: 1, status: 'completed', conclusion: 'failure' }, 1, /concluded 'failure'/],
+    [{ id: 1, status: 'in_progress', conclusion: null }, 1, /still 'in_progress'/],
+    [skipped, 1, /never ran/],
+  ]) {
+    const env = checkEnv(t, {
+      GH_CHECK_RUNS: JSON.stringify({ check_runs: [skipped, earlier] }),
+      CHECK_TIMEOUT: '0',
+    })
+    const result = run(t, ctx, 'verify.sh', env)
+    assert.equal(result.status, status, result.log)
     assert.match(result.log, pattern)
   }
 })

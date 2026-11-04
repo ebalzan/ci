@@ -117,7 +117,7 @@ Its check (`pr-check / Release PR`) holds it to the computed title. It also requ
 
 When the release PR's check passes, **add the `ship` label**. The **Release** workflow then does this:
 
-1. **Verify.** `dev` is still the PR's head, `main` fast-forwards to it, there's no merge commit, and the PR check passed. If the check is still running, it waits.
+1. **Verify.** `dev` is still the PR's head, `main` fast-forwards to it, there's no merge commit, and the PR check passed. If the check is still running, it waits. Adding the label doesn't run the check again: PR Checks skips that one event, and Release reads the result the commit already has. Removing the label still runs it.
 2. **Version and tag.** It recomputes the title and requires it to equal the PR's. In a Node repo it commits `chore(release): X.Y.Z` to bump `package.json`. Then it pushes **`main` and `dev` to that same commit**, along with `vX.Y.Z` and the moving major tag `vX`, in **one atomic push**.
 3. **Publish.** It creates the GitHub Release `vX.Y.Z`, using the PR's description as the notes.
 4. **Deploy.** It calls the repo's own `.github/workflows/deploy.yml` with the new tag.
@@ -259,6 +259,16 @@ In v1, the release PR was merged with a merge commit. In v2 it ships with the `s
 4. Squash-merge the onboarding PR into `dev`, then release by adding the `ship` label to the release PR.
 
 Do steps 2–4 together. The old `release.yml` expects a merge commit, and step 3 turns merge commits off.
+
+## Skipping PR Checks on the `ship` label
+
+Adding `ship` to the release PR doesn't need to re-run PR Checks. `actions/release` picks this up through `@v2`, but `pr-checks.yml` is the repo's own file. Per repo, by hand, because `onboard --force` would drop the repo's own jobs:
+
+1. In the `release-pr` job's `if`, add `&& !(github.event.action == 'labeled' && github.event.label.name == 'ship')`. Leave `work-pr` as it is.
+2. In the `if` of each of the repo's own jobs, add `&& !(github.event.action == 'labeled' && github.event.label.name == 'ship' && github.event.pull_request.head.ref == 'dev')`.
+3. Change the concurrency group to `pr-checks-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name == 'ship' && github.event.pull_request.head.ref == 'dev' && '-ship' || '' }}`.
+
+Repos that don't change keep working, and keep re-running their checks on `ship`.
 
 ## Developing this repo
 
