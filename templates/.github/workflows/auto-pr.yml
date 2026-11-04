@@ -31,7 +31,7 @@ jobs:
     # Renovate opens and rewrites its own PR on these branches.
     if: ${{ !startsWith(github.ref_name, 'chore/renovate-') }}
     runs-on: __RUNS_ON__
-    # Queued, never cancelled: a run cut short could leave its new PR in draft.
+    # Queued, never cancelled: a run cut short could leave its new PR half filled in.
     concurrency:
       group: auto-pr-${{ github.ref }}
       cancel-in-progress: false

@@ -109,10 +109,9 @@ test('work-pr.sh: the title is the first commit of the branch type', t => {
   ])
   assert.equal(result.status, 0, result.log)
   assert.match(result.output, /^label=feat$/m)
-  assert.match(result.output, /^created=true$/m)
   assert.match(
     result.gh,
-    /^pr create --draft --base dev --head feat\/search --title feat\(search\)!: add filters /m,
+    /^pr create --base dev --head feat\/search --title feat\(search\)!: add filters /m,
   )
 })
 

@@ -77,7 +77,7 @@ git push -u origin feat/search-filters
 - the milestone and the project board, when the repo configures them;
 - an AI-written description.
 
-It opens the PR as a draft and marks it ready for review once all of that is done.
+PR Checks runs once per push and waits for Auto PR to finish, so it checks the finished PR.
 
 While you work, keep the branch on top of `dev` by **rebasing, never merging**. The branch is yours, so rewriting it is fine:
 
