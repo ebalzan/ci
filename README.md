@@ -72,7 +72,7 @@ git push -u origin feat/search-filters
 
 **Auto PR** opens a PR into `dev` on that push. It sets:
 
-- the title: the first commit whose type is the branch's type;
+- the title: the branch name in the Conventional shape — `refact/ifc-property-and-material-parsing` becomes `refact: ifc property and material parsing`, or `refact!: …` when a commit on the branch is breaking (`!` or a `BREAKING CHANGE:` footer). After that the title is yours to edit; only a breaking commit pushed later adds the `!` to it;
 - the type label, with you as the assignee;
 - the milestone and the project board, when the repo configures them;
 - an AI-written description.
