@@ -10,9 +10,10 @@
 #                       branch defaults (scripts/shared-vars.mjs); the PR kind.
 #   2. Install git-cliff release PR only: the root package (git-cliff).
 #   3. Find or open PR  the branch's open PR, or a new one.
-#                       Work PR (work-pr.sh): title = the first commit whose
-#                       type is the branch's (else "<type>: <description>"),
-#                       body = the commit list; neither is touched afterwards.
+#                       Work PR (work-pr.sh): title = the branch name in the
+#                       Conventional shape, "<type>[!]: <description>" (`!`
+#                       when a commit is breaking), body = the commit list;
+#                       afterwards only a new breaking commit adds the `!`.
 #                       Release PR (release-pr.sh): title from
 #                       scripts/release-title.mjs, body = the git-cliff
 #                       changelog; both follow every push to dev.
