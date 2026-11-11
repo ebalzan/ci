@@ -41,14 +41,9 @@ jobs:
       REPO_VARS_JSON: ${{ toJSON(vars) }}
     steps:
       # Full history with the tags: the release PR's version comes from them.
-      - uses: actions/checkout@v4
+      - uses: __CI_REPO__/actions/setup@__CI_REF__
         with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
+          checkout-fetch-depth: 0
 
       - uses: __CI_REPO__/actions/auto-pr@__CI_REF__
         with:

@@ -51,14 +51,11 @@ jobs:
     steps:
       # The PR's head, with full history and the tags: git-cliff computes the
       # version from them. Credentials stay: the job pushes main and dev.
-      - uses: actions/checkout@v4
+      - uses: __CI_REPO__/actions/setup@__CI_REF__
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
+          checkout-ref: ${{ github.event.pull_request.head.sha }}
+          checkout-fetch-depth: 0
+          checkout-persist-credentials: true
 
       - id: release
         uses: __CI_REPO__/actions/release@__CI_REF__

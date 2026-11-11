@@ -49,9 +49,13 @@ jobs:
       group: deploy-production
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      # The tag's code, and the Node of its .nvmrc or .node-version (else 26).
+      # Any input of actions/checkout (checkout-*) or actions/setup-node
+      # (node-*) can be set here, e.g. checkout-persist-credentials: true for
+      # a deploy that pushes (gh-pages).
+      - uses: __CI_REPO__/actions/setup@__CI_REF__
         with:
-          ref: ${{ inputs.tag }}
+          checkout-ref: ${{ inputs.tag }}
 
       - name: Deploy
         env:
@@ -61,11 +65,9 @@ jobs:
       # Examples — keep what fits, drop the rest.
       #
       # An npm package (trusted publishing, no token: the job needs
-      # id-token: write):
-      # - uses: actions/setup-node@v4
-      #   with:
-      #     node-version: 24
-      #     registry-url: https://registry.npmjs.org
+      # id-token: write). Add to the setup step's `with:`:
+      #     node-registry-url: https://registry.npmjs.org
+      # then:
       # - run: npm ci
       # - run: npm publish --provenance --access public
       #

@@ -1,0 +1,216 @@
+# Checks out the repo and sets up Node: actions/checkout, then
+# actions/setup-node. Nothing in it is specific to any one repo. It is the
+# usual start of a job that validates code (build, lint, test), and of any job
+# that needs the repo plus Node.
+#
+# Every input of both upstream actions can be set, under a prefix:
+#
+#   actions/checkout     checkout-<input>   e.g. checkout-fetch-depth: 0
+#   actions/setup-node   node-<input>       e.g. node-cache: npm
+#                        node-version and node-version-file keep their names.
+#
+#   - uses: ebalzan/ci/actions/setup@v2
+#     with:
+#       checkout-fetch-depth: 0
+#       node-cache: npm
+#
+# An input left out falls back to the default shown below, which is upstream's
+# except for these:
+#
+#   checkout-persist-credentials  false: the token is not left in the git
+#                                 config for later steps. A job that pushes
+#                                 sets it to true.
+#   checkout-show-progress        false: no progress lines in the log.
+#   node-package-manager-cache    false: no cache unless node-cache asks for
+#                                 one (it fails without a lockfile, and a
+#                                 release or deploy job should not restore one
+#                                 unasked).
+#   node-version                  when neither it nor node-version-file is
+#                                 set: the checkout's .nvmrc, else its
+#                                 .node-version, else 26 (node-version.sh).
+#
+# Both actions are pinned to their major tag: when moving to a new major,
+# compare its action.yml with the inputs here. test/setup-action.test.mjs
+# checks that every input is passed through to its step and that every step's
+# input is exposed here.
+#
+# The outputs of both actions are exposed under the same prefixes.
+name: Setup
+description: Check out the repo (actions/checkout) and set up Node (actions/setup-node), with every input of both settable.
+inputs:
+  # ── actions/checkout ──────────────────────────────────────────────────────
+  checkout-repository:
+    description: Repository name with owner, e.g. actions/checkout.
+    default: ${{ github.repository }}
+  checkout-ref:
+    description: The branch, tag or SHA to check out. Empty means the ref or SHA of the triggering event, or the default branch for another repository.
+    default: ''
+  checkout-token:
+    description: Token used to fetch the repository, kept in the local git config unless checkout-persist-credentials is false.
+    default: ${{ github.token }}
+  checkout-ssh-key:
+    description: SSH key used to fetch the repository.
+    default: ''
+  checkout-ssh-known-hosts:
+    description: Known hosts to add, beyond the user and global host key database.
+    default: ''
+  checkout-ssh-strict:
+    description: Whether to check host keys strictly.
+    default: 'true'
+  checkout-ssh-user:
+    description: The user for the SSH connection.
+    default: git
+  checkout-persist-credentials:
+    description: Whether to keep the token or SSH key in the local git config. Upstream's default is true; set it for a job that pushes.
+    default: 'false'
+  checkout-path:
+    description: Path under $GITHUB_WORKSPACE to place the repository in.
+    default: ''
+  checkout-clean:
+    description: Whether to run `git clean -ffdx && git reset --hard HEAD` before fetching.
+    default: 'true'
+  checkout-filter:
+    description: Partial clone filter. Overrides checkout-sparse-checkout when set.
+    default: ''
+  checkout-sparse-checkout:
+    description: Sparse checkout patterns, one per line.
+    default: ''
+  checkout-sparse-checkout-cone-mode:
+    description: Whether to use cone mode for the sparse checkout.
+    default: 'true'
+  checkout-fetch-depth:
+    description: Number of commits to fetch. 0 fetches all history for all branches and tags.
+    default: '1'
+  checkout-fetch-tags:
+    description: Whether to fetch tags, even when fetch-depth > 0.
+    default: 'false'
+  checkout-show-progress:
+    description: Whether to show progress while fetching. Upstream's default is true.
+    default: 'false'
+  checkout-lfs:
+    description: Whether to download Git LFS files.
+    default: 'false'
+  checkout-submodules:
+    description: true to check out submodules, recursive to check them out recursively.
+    default: 'false'
+  checkout-set-safe-directory:
+    description: Whether to add the repository path to git's safe.directory.
+    default: 'true'
+  checkout-github-server-url:
+    description: Base URL of the GitHub instance to clone from. Empty means the one the workflow runs on.
+    default: ''
+  checkout-allow-unsafe-pr-checkout:
+    description: Allow checking out a fork's PR code under pull_request_target or workflow_run. Read https://gh.io/securely-using-pull_request_target first.
+    default: 'false'
+
+  # ── actions/setup-node ────────────────────────────────────────────────────
+  # Both empty here: setup-node uses node-version over node-version-file when
+  # it gets both, so a fixed default would hide the file. node-version.sh
+  # picks the fallback.
+  node-version:
+    description: Node version spec, e.g. 26, 24.x, >=22.12. Empty means node-version-file, else the checkout's .nvmrc or .node-version, else 26.
+    default: ''
+  node-version-file:
+    description: File holding the version spec, relative to $GITHUB_WORKSPACE, e.g. .nvmrc, .tool-versions, package.json. Used when node-version is empty.
+    default: ''
+  node-architecture:
+    description: Target architecture, e.g. x64. Empty means the system's.
+    default: ''
+  node-check-latest:
+    description: Whether to check for the latest version that satisfies the spec.
+    default: 'false'
+  node-registry-url:
+    description: Registry to set up for auth in a project .npmrc, read from env.NODE_AUTH_TOKEN.
+    default: ''
+  node-scope:
+    description: Scope for authenticating against scoped registries.
+    default: ''
+  node-token:
+    description: Token used to download Node distributions from actions/node-versions.
+    default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+  node-cache:
+    description: 'Package manager whose cache to restore and save: npm, yarn or pnpm.'
+    default: ''
+  node-package-manager-cache:
+    description: Set to true for the automatic cache that package.json's packageManager or devEngines.packageManager turns on. Upstream's default is true; node-cache is the explicit way.
+    default: 'false'
+  node-cache-dependency-path:
+    description: Dependency file(s) the cache key is computed from. Wildcards and lists are supported.
+    default: ''
+  node-mirror:
+    description: Mirror to download Node binaries from.
+    default: ''
+  node-mirror-token:
+    description: Authorization token for node-mirror.
+    default: ''
+outputs:
+  checkout-ref:
+    description: The branch, tag or SHA that was checked out.
+    value: ${{ steps.checkout.outputs.ref }}
+  checkout-commit:
+    description: The commit SHA that was checked out.
+    value: ${{ steps.checkout.outputs.commit }}
+  node-version:
+    description: The installed Node version.
+    value: ${{ steps.setup-node.outputs.node-version }}
+  node-cache-hit:
+    description: Whether the package manager cache was hit.
+    value: ${{ steps.setup-node.outputs.cache-hit }}
+  node-cache-primary-key:
+    description: The key used to restore and save the cache.
+    value: ${{ steps.setup-node.outputs.cache-primary-key }}
+  node-cache-matched-key:
+    description: The key of the cache that was restored. Empty when no cache was found.
+    value: ${{ steps.setup-node.outputs.cache-matched-key }}
+runs:
+  using: composite
+  steps:
+    - id: checkout
+      uses: actions/checkout@v7
+      with:
+        repository: ${{ inputs.checkout-repository }}
+        ref: ${{ inputs.checkout-ref }}
+        token: ${{ inputs.checkout-token }}
+        ssh-key: ${{ inputs.checkout-ssh-key }}
+        ssh-known-hosts: ${{ inputs.checkout-ssh-known-hosts }}
+        ssh-strict: ${{ inputs.checkout-ssh-strict }}
+        ssh-user: ${{ inputs.checkout-ssh-user }}
+        persist-credentials: ${{ inputs.checkout-persist-credentials }}
+        path: ${{ inputs.checkout-path }}
+        clean: ${{ inputs.checkout-clean }}
+        filter: ${{ inputs.checkout-filter }}
+        sparse-checkout: ${{ inputs.checkout-sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.checkout-sparse-checkout-cone-mode }}
+        fetch-depth: ${{ inputs.checkout-fetch-depth }}
+        fetch-tags: ${{ inputs.checkout-fetch-tags }}
+        show-progress: ${{ inputs.checkout-show-progress }}
+        lfs: ${{ inputs.checkout-lfs }}
+        submodules: ${{ inputs.checkout-submodules }}
+        set-safe-directory: ${{ inputs.checkout-set-safe-directory }}
+        github-server-url: ${{ inputs.checkout-github-server-url }}
+        allow-unsafe-pr-checkout: ${{ inputs.checkout-allow-unsafe-pr-checkout }}
+
+    - id: node-version
+      shell: bash
+      env:
+        NODE_VERSION: ${{ inputs.node-version }}
+        NODE_VERSION_FILE: ${{ inputs.node-version-file }}
+        CHECKOUT_PATH: ${{ inputs.checkout-path }}
+        DEFAULT_NODE_VERSION: '26'
+      run: bash "$GITHUB_ACTION_PATH/node-version.sh"
+
+    - id: setup-node
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ steps.node-version.outputs.version }}
+        node-version-file: ${{ steps.node-version.outputs.file }}
+        architecture: ${{ inputs.node-architecture }}
+        check-latest: ${{ inputs.node-check-latest }}
+        registry-url: ${{ inputs.node-registry-url }}
+        scope: ${{ inputs.node-scope }}
+        token: ${{ inputs.node-token }}
+        cache: ${{ inputs.node-cache }}
+        package-manager-cache: ${{ inputs.node-package-manager-cache }}
+        cache-dependency-path: ${{ inputs.node-cache-dependency-path }}
+        mirror: ${{ inputs.node-mirror }}
+        mirror-token: ${{ inputs.node-mirror-token }}
