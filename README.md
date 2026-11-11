@@ -237,11 +237,48 @@ Repo variables (`.github/actions.env`) or the shared `config/actions.env`:
 | `actions/auto-pr`                   | opens or updates the work PR of a branch, or the release PR of `dev`              |
 | `actions/pr-checks`                 | commitlint on the title and commits, then Danger rules for the PR's kind          |
 | `actions/release`                   | verifies, fast-forwards, tags and publishes the release on the `ship` label       |
+| `actions/setup`                     | `actions/checkout` + `actions/setup-node`, every input of both settable           |
 | `bin/`, `lib/`                      | the `ebalzan-ci` CLI: `onboard`, `sync`, `commit-msg`                             |
 | `templates/`                        | the files `onboard` writes into a repo                                            |
 | `config/`                           | types, shared variables, repo settings, rulesets, the git-cliff config            |
 | `renovate/tooling.json`             | Renovate preset for the shared tooling (`github>ebalzan/ci//renovate/tooling#v2`) |
 | `commitlint.config.mjs`, `scripts/` | the commit rules, the release title and the changelog                             |
+
+## Setup action
+
+`actions/setup` runs `actions/checkout`, then `actions/setup-node`. It doesn't depend on the rest of this repo, so any job in any repo can start with it, a validation job included:
+
+```yaml
+validate:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: ebalzan/ci/actions/setup@v2
+      with:
+        node-cache: npm
+    - run: npm ci
+    - run: npm run validate
+```
+
+Every input of both actions can be set. Prefix a checkout input with `checkout-`, and a setup-node input with `node-`:
+
+| Upstream                                   | Here                                              |
+| ------------------------------------------ | ------------------------------------------------- |
+| `actions/checkout` `fetch-depth: 0`        | `checkout-fetch-depth: 0`                         |
+| `actions/checkout` `persist-credentials`   | `checkout-persist-credentials`                    |
+| `actions/setup-node` `cache: npm`          | `node-cache: npm`                                 |
+| `actions/setup-node` `registry-url`        | `node-registry-url`                               |
+| `actions/setup-node` `node-version(-file)` | `node-version`, `node-version-file` (as they are) |
+
+An input you leave out gets upstream's default, except for these four:
+
+| Input                          | Upstream | Here                                                     | Why                                                                                                 |
+| ------------------------------ | -------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `checkout-persist-credentials` | `true`   | `false`                                                  | later steps can't push with the token. A job that pushes (like `release.yml`) sets `true`.          |
+| `checkout-show-progress`       | `true`   | `false`                                                  | no progress lines in the log                                                                        |
+| `node-package-manager-cache`   | `true`   | `false`                                                  | no cache you didn't ask for: it fails without a lockfile. Ask with `node-cache: npm`.               |
+| `node-version`                 | none     | the checkout's `.nvmrc`, else `.node-version`, else `26` | one Node version per repo, for local dev and CI. `node-version` or `node-version-file` override it. |
+
+The outputs are prefixed the same way (`checkout-commit`, `node-cache-hit`, …).
 
 ## Upgrading from v1
 

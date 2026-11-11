@@ -34,6 +34,21 @@ test('templates call existing actions of the CI repo, never its workflows', () =
   assert.ok(calls >= 3, 'auto-pr, pr-checks and release each call an action')
 })
 
+test('templates check out and set up Node through actions/setup, never directly', () => {
+  for (const file of templates) {
+    const text = read(file)
+    assert.doesNotMatch(text, /uses: actions\/(checkout|setup-node)@/, file)
+    assert.match(text, /uses: __CI_REPO__\/actions\/setup@__CI_REF__/, file)
+  }
+})
+
+test('only release keeps push credentials', () => {
+  for (const file of templates) {
+    const persists = /^ {10}checkout-persist-credentials: true$/m.test(read(file))
+    assert.equal(persists, file === 'release.yml', file)
+  }
+})
+
 test('pr-checks.yml reports the check names the shared rulesets require', () => {
   const text = read('pr-checks.yml')
   for (const file of readdirSync(join(ROOT, 'config', 'rulesets'))) {
