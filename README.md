@@ -317,11 +317,13 @@ npm run format:check   # Prettier
 npm test               # node:test, on throwaway git repos with a stubbed gh
 ```
 
-The same flow applies here: work branches squash into `dev`. This repo has no workflows of its own, so release it by hand, with a fast-forward rather than a merge commit:
+The same flow applies here, with the same four workflows in [`.github/workflows`](.github/workflows): Auto PR, PR Checks, Release and Deploy. They aren't onboarded copies (`onboard` refuses this repo). They run the actions by local path (`./actions/<name>`) from the commit under test, not from `ebalzan/ci/actions/…@v2`, so a PR that changes a check is held to the changed check. That includes `./actions/setup`: a local action has to be on disk before it runs, so each job starts with a sparse checkout of `actions/setup` alone, and setup then checks out the repo and sets up Node.
 
-```sh
-git switch main && git merge --ff-only dev && git push
-```
+- **PR Checks** adds a `Validate` job: `npm run check`, `lint`, `format:check` and `test`.
+- **Release** (the `ship` label) moves `vX.Y.Z` and the major tag `vX`, which is how every onboarded repo gets the release.
+- **Deploy** publishes the tag to npm with [trusted publishing](https://docs.npmjs.com/trusted-publishers) (no token). Set it up once on npmjs.com for `ebalzan/ci`, workflow `release.yml` (and `deploy.yml` for runs by hand), environment `npm`. A version npm already has is skipped.
+
+`test/self-workflows.test.mjs` keeps them in step with the templates: the same files and job names, local actions only.
 
 ## License
 

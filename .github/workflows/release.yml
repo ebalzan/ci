@@ -1,0 +1,76 @@
+# =============================================================================
+# Release — this repo's own, not an onboarded copy.
+#
+# The same jobs as templates/.github/workflows/release.yml: add the `ship`
+# label to the dev → main release PR once its check passes, and ./actions/release
+# fast-forwards main to dev, bumps package.json, pushes vX.Y.Z and the moving
+# major tag vX (what every onboarded repo pins) and creates the GitHub Release.
+# Then `deploy` publishes that tag to npm (deploy.yml).
+#
+# The action runs from the PR's head, the commit being released, instead of
+# ebalzan/ci/actions/release@v2. ./actions/setup is the local copy too: a
+# sparse checkout of it comes first. Credentials stay: the job pushes main, dev
+# and the tags.
+# =============================================================================
+name: Release
+
+on:
+  pull_request:
+    types: [labeled, closed]
+    branches: ['main']
+
+permissions:
+  contents: write
+  pull-requests: read
+  checks: read
+
+jobs:
+  release:
+    name: Version, tag and publish
+    if: >-
+      ${{ github.event.pull_request.head.ref == 'dev'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && ((github.event.action == 'labeled' && github.event.label.name == 'ship'
+           && github.event.pull_request.state == 'open')
+          || (github.event.action == 'closed' && github.event.pull_request.merged)) }}
+    runs-on: ubuntu-latest
+    # Queued, never cancelled: a run cut short could tag without a Release.
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      AUTO_BASE_BRANCH: dev
+      AUTO_RELEASE_BRANCH: main
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      # ./actions/setup is a local action: its files must be on disk before it
+      # runs. This fetches only them, from the workflow's own commit; setup then
+      # checks out the ref the job needs.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: actions/setup
+          persist-credentials: false
+          show-progress: false
+
+      - uses: ./actions/setup
+        with:
+          checkout-ref: ${{ github.event.pull_request.head.sha }}
+          checkout-fetch-depth: 0
+          checkout-persist-credentials: true
+
+      - id: release
+        uses: ./actions/release
+
+  deploy:
+    needs: release
+    if: ${{ needs.release.outputs.tag != '' }}
+    # Keep equal to deploy.yml's own `permissions`.
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit

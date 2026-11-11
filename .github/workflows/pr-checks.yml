@@ -1,0 +1,123 @@
+# =============================================================================
+# PR Checks — this repo's own, not an onboarded copy.
+#
+#   pr-check / Work PR     ./actions/pr-checks for feat/fix/… PRs into dev.
+#   pr-check / Release PR  ./actions/pr-checks for the dev → main PR.
+#   Validate               npm run check, lint, format:check and test.
+#
+# The same jobs as templates/.github/workflows/pr-checks.yml, but the actions
+# run from the PR's head instead of ebalzan/ci/actions/…@v2, so a PR that
+# changes a check is held to the changed check. Even ./actions/setup is the
+# local copy: a sparse checkout of it comes first, then it checks out the PR's
+# head and sets up Node.
+#
+# Keep the two pr-check job names as they are: they are the check names the
+# shared rulesets require, and the Release workflow waits for the second one.
+# Adding `ship` to the release PR skips every job (Release reads the result the
+# head already has), in a concurrency group of its own so it cancels no real run.
+# =============================================================================
+name: PR Checks
+
+on:
+  pull_request:
+    branches: ['main', 'dev']
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - edited
+      - labeled
+      - unlabeled
+      - milestoned
+      - demilestoned
+      - assigned
+      - unassigned
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name == 'ship' && github.event.pull_request.head.ref == 'dev' && '-ship' || '' }}
+  cancel-in-progress: true
+
+env:
+  AUTO_BASE_BRANCH: dev
+  AUTO_RELEASE_BRANCH: main
+  REPO_VARS_JSON: ${{ toJSON(vars) }}
+
+jobs:
+  work-pr:
+    name: pr-check / Work PR
+    if: ${{ github.event.pull_request.head.ref != 'dev' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      # ./actions/setup is a local action: its files must be on disk before it
+      # runs. This fetches only them, from the workflow's own commit; setup then
+      # checks out the ref the job needs.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: actions/setup
+          persist-credentials: false
+          show-progress: false
+
+      - uses: ./actions/setup
+        with:
+          checkout-ref: ${{ github.event.pull_request.head.sha }}
+          checkout-fetch-depth: 0
+
+      - uses: ./actions/pr-checks
+        with:
+          kind: work
+          project-token: ${{ secrets.GH_PROJECT_TOKEN }}
+
+  release-pr:
+    name: pr-check / Release PR
+    if: ${{ github.event.pull_request.head.ref == 'dev' && !github.event.pull_request.draft && !(github.event.action == 'labeled' && github.event.label.name == 'ship') }}
+    runs-on: ubuntu-latest
+    steps:
+      # ./actions/setup is a local action: its files must be on disk before it
+      # runs. This fetches only them, from the workflow's own commit; setup then
+      # checks out the ref the job needs.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: actions/setup
+          persist-credentials: false
+          show-progress: false
+
+      # Full history with the tags: git-cliff computes the version from them.
+      - uses: ./actions/setup
+        with:
+          checkout-ref: ${{ github.event.pull_request.head.sha }}
+          checkout-fetch-depth: 0
+
+      - uses: ./actions/pr-checks
+        with:
+          kind: release
+          project-token: ${{ secrets.GH_PROJECT_TOKEN }}
+
+  validate:
+    name: Validate
+    if: ${{ !github.event.pull_request.draft && !(github.event.action == 'labeled' && github.event.label.name == 'ship' && github.event.pull_request.head.ref == 'dev') }}
+    runs-on: ubuntu-latest
+    steps:
+      # ./actions/setup is a local action: its files must be on disk before it
+      # runs. This fetches only them, from the workflow's own commit; setup then
+      # checks out the ref the job needs.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: actions/setup
+          persist-credentials: false
+          show-progress: false
+
+      - uses: ./actions/setup
+        with:
+          checkout-ref: ${{ github.event.pull_request.head.sha }}
+          node-cache: npm
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test

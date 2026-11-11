@@ -1,0 +1,57 @@
+# =============================================================================
+# Auto PR — this repo's own, not an onboarded copy.
+#
+# The same job as templates/.github/workflows/auto-pr.yml, but it runs
+# ./actions/auto-pr from the pushed commit instead of ebalzan/ci/actions/…@v2:
+# a change to the action is exercised by the push that makes it, and nothing
+# waits on a released tag. Even ./actions/setup is the local copy: a sparse
+# checkout of it comes first, then it checks out the repo and sets up Node. Keep the file name: PR Checks waits for the run
+# of auto-pr.yml (actions/pr-checks/wait-for-auto-pr.sh).
+# =============================================================================
+name: Auto PR
+
+on:
+  push:
+    branches-ignore:
+      - main
+    tags-ignore:
+      - '**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-pr:
+    name: Open or update PR
+    # Renovate opens and rewrites its own PR on these branches.
+    if: ${{ !startsWith(github.ref_name, 'chore/renovate-') }}
+    runs-on: ubuntu-latest
+    # Queued, never cancelled: a run cut short could leave its new PR half filled in.
+    concurrency:
+      group: auto-pr-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      AUTO_BASE_BRANCH: dev
+      AUTO_RELEASE_BRANCH: main
+      REPO_VARS_JSON: ${{ toJSON(vars) }}
+    steps:
+      # ./actions/setup is a local action: its files must be on disk before it
+      # runs. This fetches only them, from the workflow's own commit; setup then
+      # checks out the ref the job needs.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: actions/setup
+          persist-credentials: false
+          show-progress: false
+
+      # Full history with the tags: the release PR's version comes from them.
+      - uses: ./actions/setup
+        with:
+          checkout-fetch-depth: 0
+
+      - uses: ./actions/auto-pr
+        with:
+          github-token: ${{ secrets.GH_PROJECT_TOKEN || github.token }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
