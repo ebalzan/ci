@@ -1,0 +1,76 @@
+# =============================================================================
+# Deploy — publishes a release of @ebalzan/ci to npm.
+#
+# release.yml calls it with the new tag after every release; the actions
+# themselves need no deploy, since repos reach them through the vX tag the
+# release already moved. Run it by hand (Actions → Deploy → Run workflow) to
+# publish a tag again, e.g. after a failed publish. A version npm already has
+# is skipped, so a re-run is harmless.
+#
+# npm trusted publishing (OIDC, no token): on npmjs.com, @ebalzan/ci →
+# Settings → Trusted publishing → GitHub Actions, repository ebalzan/ci,
+# workflow release.yml (a release's run) — add deploy.yml too for runs by hand
+# — and environment `npm`. The job needs id-token: write; release.yml's
+# `deploy` job grants the same and this file may not ask for more.
+# =============================================================================
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release to publish (vX.Y.Z).
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to publish (vX.Y.Z).
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: npm
+    # One publish at a time, never cancelled half-way.
+    concurrency:
+      group: deploy-npm
+      cancel-in-progress: false
+    steps:
+      # ./actions/setup is a local action: its files must be on disk before it
+      # runs. This fetches only them, from the workflow's own commit; setup then
+      # checks out the ref the job needs.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: actions/setup
+          persist-credentials: false
+          show-progress: false
+
+      - uses: ./actions/setup
+        with:
+          checkout-ref: ${{ inputs.tag }}
+          node-registry-url: https://registry.npmjs.org
+
+      # The package is its source files (package.json "files"): no install and
+      # no build. --ignore-scripts skips `prepare` (husky, a devDependency).
+      - name: Publish
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          name="$(node -p 'require("./package.json").name')"
+          version="$(node -p 'require("./package.json").version')"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::$TAG has package.json version $version."
+            exit 1
+          fi
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::notice::$name@$version is already on npm: nothing to publish."
+            exit 0
+          fi
+          npm publish --provenance --access public --ignore-scripts
