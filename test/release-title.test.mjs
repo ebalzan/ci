@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { changelog } from '../scripts/changelog.mjs'
+import { TYPES } from '../commitlint.config.mjs'
+import { bumpEnv, changelog, gitCliff } from '../scripts/changelog.mjs'
 import { releaseTitle, releaseVersion, unreleased } from '../scripts/release-title.mjs'
 import { ROOT, gitRepo, isolatedEnv } from './helpers.mjs'
 
@@ -71,6 +72,22 @@ test('git-cliff: bumps from the last vX.Y.Z tag, ignoring the moving major tag',
     'fix!: release v2.0.0',
   )
   assert.equal(titleOf(history(t, ['tag v0.3.0', 'feat!: a'])), 'feat!: release v1.0.0')
+})
+
+test("bumpEnv: the minor types of types.json, as git-cliff's custom minor regex", () => {
+  assert.deepEqual(bumpEnv(), { GIT_CLIFF__BUMP__CUSTOM_MINOR_INCREMENT_REGEX: '^(feat)$' })
+})
+
+test('git-cliff: the bump follows types.json `release`, not cliff.toml', t => {
+  const perfMinor = { ...TYPES, perf: { ...TYPES.perf, release: 'minor' } }
+  const bumped = (steps, types) =>
+    gitCliff(['--bumped-version'], { cwd: history(t, steps), types }).trim()
+  assert.equal(bumped(['tag v1.2.0', 'perf: a']), 'v1.2.1')
+  assert.equal(bumped(['tag v1.2.0', 'perf: a'], perfMinor), 'v1.3.0')
+  assert.equal(bumped(['tag v0.3.0', 'perf: a'], perfMinor), 'v0.4.0')
+  assert.equal(bumped(['tag v1.2.0', 'fix: a'], perfMinor), 'v1.2.1')
+  assert.equal(bumped(['tag v1.2.0', 'perf!: a'], perfMinor), 'v2.0.0')
+  assert.equal(bumped(['tag v0.3.0', 'feat: a']), 'v0.4.0')
 })
 
 test('git-cliff: main fast-forwarded to dev, then the release commit, is released', t => {

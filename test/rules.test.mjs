@@ -27,6 +27,12 @@ test('types.json: release, color, minor types first; every reader sees it', () =
     'minor types come first: the release PR title takes the first type present',
   )
 
+  assert.equal(
+    fromFile.feat?.release,
+    'minor',
+    'feat must be minor: git-cliff bumps it minor whatever the config says',
+  )
+
   assert.deepEqual(types, order)
   assert.deepEqual(commitlintConfig.rules['type-enum'][2], order)
 })

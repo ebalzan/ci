@@ -1,5 +1,5 @@
-// git-cliff (config/cliff.toml), the one place its binary, its config and the
-// changelog's heading are named. The release title (release-title.mjs) reads
+// git-cliff (config/cliff.toml), the one place its binary, its config, the
+// bumps of config/types.json and the changelog's heading are named. The release title (release-title.mjs) reads
 // its context; the release PR body (actions/auto-pr/release-pr.sh) and the
 // fallback GitHub Release notes (actions/release/publish.sh) are its changelog.
 //
@@ -15,20 +15,32 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+import { TYPES } from '../commitlint.config.mjs'
+
 const ROOT = new URL('../', import.meta.url)
 const GIT_CLIFF = fileURLToPath(new URL('node_modules/.bin/git-cliff', ROOT))
 const CLIFF_CONFIG = fileURLToPath(new URL('config/cliff.toml', ROOT))
 
 export const HEADING = '## Changes'
 
-// git-cliff ARGS in CWD with config/cliff.toml: its stdout, or a throw with its
-// stderr.
-export function gitCliff(args, { cwd = process.cwd() } = {}) {
+// The bumps come from config/types.json, not cliff.toml: every type whose
+// `release` is minor goes into git-cliff's custom minor regex (matched against
+// the commit type). Breaking → major, and every other type → patch, are
+// git-cliff's own rules. git-cliff bumps feat minor whatever the config says,
+// so types.json must say so too (test/rules.test.mjs).
+export function bumpEnv(types = TYPES) {
+  const minor = Object.keys(types).filter(type => types[type].release === 'minor')
+  return { GIT_CLIFF__BUMP__CUSTOM_MINOR_INCREMENT_REGEX: `^(${minor.join('|')})$` }
+}
+
+// git-cliff ARGS in CWD with config/cliff.toml and the bumps of TYPES: its
+// stdout, or a throw with its stderr.
+export function gitCliff(args, { cwd = process.cwd(), types = TYPES } = {}) {
   const result = spawnSync(GIT_CLIFF, ['--config', CLIFF_CONFIG, ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NO_COLOR: '1' },
+    env: { ...process.env, ...bumpEnv(types), NO_COLOR: '1' },
   })
   if (result.error) throw new Error(`git-cliff failed: ${result.error.message}`)
   if (result.status !== 0) throw new Error(`git-cliff failed:\n${result.stderr.trim()}`)
