@@ -1,5 +1,5 @@
 {
-  "$comment": "Repository settings every managed repo gets (PATCH /repos/{owner}/{repo}). A repo overrides any key in its own .github/repo-settings.json. Keys starting with $ are documentation and are never sent. History is linear, with no merge commits: work PRs are squash-merged into dev (the PR title becomes the commit); the dev → main release PR is never merged with a button — its `ship` label makes the Release workflow fast-forward main to dev. Merge commits and rebase merges are off: rebase rewrites dev's commits, so main and dev would diverge.",
+  "$comment": "Squash-merge only, linear history. See config/README.md#repo-settingsjson.",
   "allow_squash_merge": true,
   "allow_merge_commit": false,
   "allow_rebase_merge": false,

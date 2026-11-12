@@ -1,5 +1,5 @@
 {
-  "$comment": "dev is the integration branch: it cannot be deleted or force-pushed, and its history stays linear (main fast-forwards to it). Work PRs squash into it; the Release workflow only fast-forwards it to the release commit, so nothing in the pipeline needs a bypass.",
+  "$comment": "dev: no deletion, no force push, linear history. See config/README.md#rulesets.",
   "name": "ci: protect dev",
   "target": "branch",
   "enforcement": "active",
