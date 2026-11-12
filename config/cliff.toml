@@ -4,9 +4,11 @@
 # actions/pr-checks recomputes the title with it, actions/release recomputes it
 # on main and falls back to it for the GitHub Release notes.
 #
-# The bump matches config/types.json: feat → minor, `!` or a BREAKING CHANGE
-# footer → major (from 0.x too), every other type → patch. A repo with no tag
-# yet starts at v0.1.0 (initial_tag).
+# Which types bump minor is NOT set here: config/types.json's `release` is the
+# one place, and scripts/changelog.mjs (the only caller) passes its minor types
+# as GIT_CLIFF__BUMP__CUSTOM_MINOR_INCREMENT_REGEX. Run git-cliff through it,
+# not directly. Set here: `!` or a BREAKING CHANGE footer → major (from 0.x
+# too), any other type → patch, and a repo with no tag yet starts at v0.1.0.
 
 [changelog]
 # One `### <type>` section per type, feat first, the others alphabetically.
@@ -35,6 +37,7 @@ commit_parsers = [
 ]
 
 [bump]
+# git-cliff's own feat rule, kept for 0.x; types.json must list feat as minor.
 features_always_bump_minor = true
 breaking_always_bump_major = true
 initial_tag = "v0.1.0"

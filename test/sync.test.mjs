@@ -55,6 +55,45 @@ test('a ruleset without a name is an error', t => {
   assert.match(result.stderr, /Ruleset bad\.json has no "name"/)
 })
 
+test('an unknown repository setting is an error, not a silent no-op', t => {
+  const result = dryRun(t, { '.github/repo-settings.json': '{ "allow_squash_merges": true }\n' })
+  assert.equal(result.status, 1)
+  assert.match(
+    result.stderr,
+    /repo-settings\.json: unknown repository setting\(s\) allow_squash_merges/,
+  )
+})
+
+test('a ruleset with an unknown key, rule type or enforcement is an error', t => {
+  const cases = [
+    ['{ "enforcment": "active" }', /protect-main\.json: unknown key\(s\) enforcment/],
+    ['{ "enforcement": "on" }', /protect-main\.json: enforcement is 'on', expected one of/],
+    ['{ "rules": [{ "type": "no_force_push" }] }', /unknown rule type 'no_force_push'/],
+  ]
+  for (const [body, error] of cases) {
+    const result = dryRun(t, { '.github/rulesets/protect-main.json': `${body}\n` })
+    assert.equal(result.status, 1, body)
+    assert.match(result.stderr, error, body)
+  }
+})
+
+test('a secret in the example that no layer sets is warned about', t => {
+  const secretsDir = tempDir(t)
+  writeFile(secretsDir, 'secrets.env', 'ANTHROPIC_API_KEY=real-value\n')
+  const missing = dryRun(t, {}, [], { CI_SECRETS_DIR: secretsDir })
+  assert.equal(missing.status, 0, missing.stderr + missing.stdout)
+  assert.match(
+    missing.stdout,
+    /! GH_PROJECT_TOKEN is in config\/secrets\.env\.example but set nowhere/,
+  )
+  assert.doesNotMatch(missing.stdout, /ANTHROPIC_API_KEY is in/)
+
+  const fromRepo = dryRun(t, { '.github/secrets.env': 'GH_PROJECT_TOKEN_FILE=token.txt\n' }, [], {
+    CI_SECRETS_DIR: secretsDir,
+  })
+  assert.doesNotMatch(fromRepo.stdout, /set nowhere/)
+})
+
 test("shared secrets come from CI_SECRETS_DIR; the repo's .github/ overrides them", t => {
   const secretsDir = tempDir(t)
   writeFile(secretsDir, 'secrets.env', 'ANTHROPIC_API_KEY=real-value\nGH_PROJECT_TOKEN=token\n')
@@ -73,6 +112,7 @@ test("shared secrets come from CI_SECRETS_DIR; the repo's .github/ overrides the
   assert.match(result.stdout, /GH_PROJECT_TOKEN +repo \(overrides shared\)/)
   assert.match(result.stdout, /environment 'production' secrets\n +DEPLOY_KEY +repo/)
   assert.match(result.stdout, /environment 'staging' secrets\n +DB_URL +shared/)
+  assert.doesNotMatch(result.stdout, /set nowhere/)
 })
 
 test('--skip leaves sections out of the plan, and rejects unknown ones', t => {

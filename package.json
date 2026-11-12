@@ -42,7 +42,8 @@
     "config/types.json",
     "config/repo-settings.json",
     "config/rulesets/",
-    "config/secrets.env.example"
+    "config/secrets.env.example",
+    "config/README.md"
   ],
   "engines": {
     "node": ">=22.12"

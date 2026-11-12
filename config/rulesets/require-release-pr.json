@@ -1,5 +1,5 @@
 {
-  "$comment": "main moves only through the Release workflow: the release PR's `ship` label makes it fast-forward main to dev after 'pr-check / Release PR' passed (the workflow checks it). This ruleset restricts updates to its bypass list — GitHub Actions only — so nobody can merge into or push to main, and the release PR's merge buttons stay blocked (squash and rebase would rewrite dev's commits). In an emergency, an admin disables it. DISABLED by default: the Release workflow pushes main with GITHUB_TOKEN, so the GitHub Actions app (Integration 15368) must be able to bypass it. Enable it per repo with .github/rulesets/require-release-pr.json containing {\"enforcement\": \"active\"}, run one release, and confirm it went through.",
+  "$comment": "main only through the Release workflow. Disabled by default; 15368 = GitHub Actions app. See config/README.md#rulesets.",
   "name": "ci: require release pull request",
   "target": "branch",
   "enforcement": "disabled",
