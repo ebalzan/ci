@@ -1,4 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>ebalzan/ci//renovate/tooling#v1"]
+  "extends": ["github>ebalzan/ci//renovate/tooling#v2"]
 }
