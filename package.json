@@ -61,15 +61,15 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@commitlint/cli": "21.2.3"
+    "@commitlint/cli": "21.2.4"
   },
   "devDependencies": {
-    "@ebalzan/config": "0.2.0",
-    "danger": "14.0.7",
-    "eslint": "10.14.0",
+    "@ebalzan/config": "0.2.2",
+    "danger": "14.1.0",
+    "eslint": "10.15.0",
     "git-cliff": "2.14.2",
     "husky": "9.1.7",
-    "prettier": "3.9.10"
+    "prettier": "3.10.1"
   },
   "prettier": "@ebalzan/config/prettier"
 }
